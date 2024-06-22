@@ -1,1 +1,3 @@
 python-dotenv==1.0.1
+wandb==0.17.2
+pandas==2.2.2

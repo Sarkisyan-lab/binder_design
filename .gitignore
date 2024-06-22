@@ -3,3 +3,5 @@
 outputs/
 logs/
 __pycache__/
+artifacts/
+wandb/
