@@ -71,7 +71,7 @@ class Scheduler:
         )
 
         if job_type == "folding":
-            af_multimer_command = f"bash run_alphafold.sh -d {os.getenv('AFDB_PATH')} -o {os.path.dirname(final_output_dir)} -m model_1_multimer_v3 -p multimer -i {fasta_file_dir} -t 2020-12-01 -Y common_chain -Z {common_chain_msa_path} -u {self.args.gpu_id}"
+            af_multimer_command = f"bash run_alphafold.sh -d {os.getenv('AFDB_PATH')} -o {os.path.dirname(final_output_dir)} -m model_1_multimer_v3 -p multimer -i {fasta_file_dir} -t 2020-12-01 -Y common_chain -Z {common_chain_msa_path} -u {self.args.gpu_id} -r best"
         else:
             af_multimer_command = f"bash run_alphafold.sh -d {os.getenv('AFDB_PATH')} -o {final_output_dir} -m model_1_multimer_v3 -p multimer -i {fasta_file_dir} -t 2020-12-01"
 
