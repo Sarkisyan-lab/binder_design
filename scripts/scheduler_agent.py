@@ -23,6 +23,9 @@ TABLE_COLUMNS = [
     "folding_device",
 ]
 ARTIFACT_NAME = "parafold_jobs"
+STATUS_COMPLETED = "completed"
+STATUS_NOT_STARTED = "not_started"
+STATUS_IN_PROGRESS = "in_progress"
 
 
 class Scheduler:
@@ -171,7 +174,7 @@ class Scheduler:
         artifact.add(table_to_upload, table_name)
         wandb.log_artifact(artifact)
 
-    def sync_table(self):
+    def sync_table(self, force=False):
         # Retrieve the table from wandb
         wandb_table = self.retrieve_wandb_jobs()
         print(f"Total Wandb jobs: {len(wandb_table)}")
@@ -201,6 +204,17 @@ class Scheduler:
                         wandb_table[wandb_job_idx][
                             f"{j_type}_device"
                         ] = self.args.device
+
+                    if (
+                        force == True
+                        and wandb_table[wandb_job_idx][f"{j_type}_status"]
+                        == "in_progress"
+                        and local_table[local_job_idx][f"{j_type}_status"]
+                        == "not_started"
+                    ):
+                        print(f"Making {job} as not_started in wandb table...")
+                        wandb_table[wandb_job_idx][f"{j_type}_status"] = "not_started"
+                        wandb_table[wandb_job_idx][f"{j_type}_device"] = "none"
 
             # If job not found in wandb_table, add it
             else:
