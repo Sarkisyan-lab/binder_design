@@ -4,7 +4,7 @@ import subprocess
 from dotenv import load_dotenv
 
 # load .env
-load_dotenv()
+load_dotenv(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.env")
 
 # Create the parser
 parser = argparse.ArgumentParser()
@@ -14,6 +14,7 @@ parser.add_argument(
     "--num_designs", type=int, help="Number of RF designs to generate", default=100
 )
 parser.add_argument("--job_name", type=str, help="job_name", required=True)
+parser.add_argument("--pdb_file_path", type=str, help="pdb file path", required=True)
 parser.add_argument(
     "--hotspot_residues", type=str, help="Hotspot residues", required=True
 )
@@ -64,12 +65,13 @@ if __name__ == "__main__":
     job_name = args.job_name
     hotspot_residues = args.hotspot_residues
     contigs = args.contigs
+    input_pdb_path = args.pdb_file_path
 
     rf_diff_repo_path = os.getenv("RF_DIFFUSION_REPO_PATH")
+    print(rf_diff_repo_path)
 
     # make output dir what's needed
     folder_path = make_latest_dir(job_name)
-    input_pdb_path = os.path.join(BASE_PATH, "inputs/mrp_2_complex.pdb")
 
     commands = [
         f"source {os.getenv('CONDA_PATH')}",
