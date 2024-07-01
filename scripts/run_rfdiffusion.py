@@ -77,8 +77,8 @@ if __name__ == "__main__":
         f"source {os.getenv('CONDA_PATH')}",
         f"conda activate {os.getenv('RFDIFF_ENV')}",
         f"cd {os.getenv('RF_DIFFUSION_REPO_PATH')}",
-        f"CUDA_VISIBLE_DEVICES={args.cuda_device_id}",
-        f'scripts/run_inference.py inference.output_prefix={folder_path} inference.input_pdb={input_pdb_path} "contigmap.contigs={args.contigs}" inference.num_designs={args.num_designs} "ppi.hotspot_res={args.hotspot_residues}"',
+        f"export CUDA_VISIBLE_DEVICES={args.cuda_device_id}",
+        f'scripts/run_inference.py inference.output_prefix={folder_path} inference.input_pdb={input_pdb_path} "contigmap.contigs={args.contigs}" inference.num_designs={args.num_designs} inference.write_trajectory=False',
     ]
 
     if args.logs_dir:
