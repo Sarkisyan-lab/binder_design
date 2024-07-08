@@ -72,7 +72,7 @@ class Scheduler:
         else:
             print("Invalid fasta file")
         # TODO: Remove outmulti once sto is done
-        out_path = trimmed_fasta_dirname.replace("protein_mpnn/", "parafold/")
+        out_path = trimmed_fasta_dirname.replace("ligand_mpnn/processed/", "parafold/")
         return out_path
 
     def submit_job_lilibet(self, fasta_file_dir, job_type="folding"):

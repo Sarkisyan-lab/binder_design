@@ -1,5 +1,5 @@
 .env
-*.ipynb
+test.*
 outputs/
 logs/
 __pycache__/
