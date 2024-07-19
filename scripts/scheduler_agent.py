@@ -280,7 +280,7 @@ class Scheduler:
                     shell=True,
                 )
 
-    def main(self, job_type: str, max_jobs=1, sleep_duration_sec=60):
+    def main_wandb(self, job_type: str, max_jobs=1, sleep_duration_sec=60):
         # OUTPUT_DIR_PATH = os.getenv("OUTPUT_DIR_PATH")
         fasta_files_local = self.get_fasta_file_paths()
         fasta_file_names = [
@@ -362,6 +362,70 @@ class Scheduler:
                 time.sleep(sleep_duration_sec)
         print("\nAll Jobs Finished!")
 
+    def main_local(
+        self, job_type: str, max_jobs=1, sleep_duration_sec=60, sleep_counter_max=10
+    ):
+        fasta_files_local = self.get_fasta_file_paths()
+        fasta_file_names = [
+            file.split("/")[-1].replace(".fasta", "").replace(".fa", "")
+            for file in fasta_files_local
+        ]
+
+        job_idx = 0
+        sleep_counter = 0
+        while job_idx <= max_jobs:
+            print(f"\nJob Idx: {job_idx}: Checking for jobs to submit...\n")
+
+            # sync and retrieve current jobs
+            curr_local_jobs = self.retrieve_local_jobs()
+
+            job_found = False
+            for job in curr_local_jobs:
+                # folding job
+                if (
+                    job_type == "folding"
+                    and job["msa_status"]
+                    == STATUS_COMPLETED  # completed msa generation
+                    and job["folding_status"]
+                    == STATUS_NOT_STARTED  # not started folding
+                ):
+                    job_found = True
+                    full_inp_path = fasta_files_local[
+                        fasta_file_names.index(job["file_name"])
+                    ]
+                    if not self.check_if_msas_exist(
+                        self.obtain_parafold_out_path(full_inp_path),
+                    ):
+                        self.sync_msas(
+                            msa_folder_path=self.obtain_parafold_out_path(
+                                full_inp_path
+                            ),
+                            from_device=job["msa_device"],
+                            to_device=self.args.device,
+                        )
+                    # TODO: Submit Job
+                    print(f"\nJob Idx: {job_idx}: Submitting {job['file_name']} \n")
+
+                    self.add_common_chain_to_fasta(full_inp_path)
+                    self.submit_job_lilibet(
+                        fasta_file_dir=full_inp_path,
+                        job_type=job_type,
+                    )
+                    print(f"\nFinished Job: {job['file_name']} \n")
+                    job_idx += 1
+                    break
+            if sleep_counter == sleep_counter_max:
+                print("Sleep Counter Max Reached. Exiting...")
+                return None
+            if job_found == False:
+                sleep_counter += 1
+                print(
+                    f"Found no relevant jobs... Sleeping for {sleep_duration_sec} seconds..."
+                )
+                time.sleep(sleep_duration_sec)
+
+        print("\nAll Jobs Finished!")
+
 
 if __name__ == "__main__":
     # Parse the arguments
@@ -412,7 +476,7 @@ if __name__ == "__main__":
     scheduler = Scheduler(args)
 
     try:
-        scheduler.main(
+        scheduler.main_local(
             job_type=args.job_type,
             max_jobs=args.max_jobs,
             sleep_duration_sec=args.sleep_duration_sec,
