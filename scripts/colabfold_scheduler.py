@@ -1,16 +1,26 @@
 import os
-from os import path
 import subprocess
 import firebase_admin
 from firebase_admin import db
 import glob
-import json
+import pandas as pd
 from argparse import Namespace
 from click import command, option
 
+# constants
+STATUS_UNASSIGNED = "unassigned"
+STATUS_NOT_STARTED = "not_started"
+STATUS_COMPLETED = "completed"
+DEVICE_LILIBET = "lilibet"
+DEVICE_HPC_CX3 = "hpc_cx3"
+DEVICE_HPC_BASE = "hpc_base"
+DEVICE_JEX = "jex"
+JOB_TYPE_MSA = "msa"
+JOB_TYPE_FOLDING = "folding"
+
 
 class TaskScheduler:
-    def __init__(self, config: dict, device="lilibet"):
+    def __init__(self, config: dict, device=DEVICE_LILIBET):
         self.config = Namespace(**config)
         self.device = device
         cred_obj = firebase_admin.credentials.Certificate(
@@ -52,10 +62,10 @@ class TaskScheduler:
                     {
                         "file_name": os.path.basename(fasta_file).split(".")[0],
                         "seq": fasta_content,
-                        "msa_status": "not_started",
-                        "folding_status": "not_started",
-                        "msa_device": "unassigned",
-                        "folding_device": "unassigned",
+                        "msa_status": STATUS_NOT_STARTED,
+                        "folding_status": STATUS_NOT_STARTED,
+                        "msa_device": STATUS_UNASSIGNED,
+                        "folding_device": STATUS_UNASSIGNED,
                     }  # type: ignore
                 )
 
@@ -67,7 +77,7 @@ class TaskScheduler:
                 filtered_tasks.append(value)
         return filtered_tasks
 
-    def get_local_tasks_status(self, fasta_dir: str) -> dict:
+    def get_local_tasks_status(self, fasta_dir: str) -> list:
         local_task_status = []
         for fasta_file in glob.glob(os.path.join(fasta_dir, "*.fasta")) + glob.glob(
             os.path.join(fasta_dir, "*.fa")
@@ -77,25 +87,44 @@ class TaskScheduler:
                 task_status = {
                     "file_name": file_name,
                     "seq": self.fasta_file_to_fasta_str(fasta_file),
-                    "msa_status": "not_started",
-                    "folding_status": "not_started",
-                    "msa_device": "unassigned",
-                    "folding_device": "unassigned",
+                    "msa_status": STATUS_NOT_STARTED,
+                    "folding_status": STATUS_NOT_STARTED,
+                    "msa_device": STATUS_UNASSIGNED,
+                    "folding_device": STATUS_UNASSIGNED,
                 }
 
                 # If folding / msa is completed
-                ind_output_dir = os.path.join(
-                    self.config.lilibet_output_dir, file_name, "output"
+                if self.device == DEVICE_LILIBET:
+                    base_output_dir = self.config.lilibet_output_dir
+                elif self.device == DEVICE_HPC_CX3 or self.device == DEVICE_HPC_BASE:
+                    base_output_dir = self.config.hpc_output_dir
+                elif self.device == DEVICE_JEX:
+                    base_output_dir = self.config.jex_output_dir
+                else:
+                    raise ValueError(f"Unknown device: {self.device}")
+
+                msas_dir = os.path.join(base_output_dir, "msas")
+                predictions_dir = os.path.join(
+                    base_output_dir, "predictions", file_name
                 )
-                if os.path.exists(ind_output_dir):
-                    folder_contents = os.listdir(ind_output_dir)
-                    for file in folder_contents:
-                        if file.endswith(".a3m") or file.endswith(".pickle"):
-                            task_status["msa_status"] = "completed"
+                # Check if MSAs exist
+                if os.path.exists(msas_dir):
+                    msas_folder_contents = os.listdir(msas_dir)
+                    for file in msas_folder_contents:
+                        if file_name in file and file.endswith(".a3m"):
+                            task_status["msa_status"] = STATUS_COMPLETED
                             task_status["msa_device"] = self.device
-                        elif "rank_001_alphafold2_multimer_v3" in file:
-                            task_status["folding_status"] = "completed"
+                            break
+
+                # Check if predictions exist
+                if os.path.exists(predictions_dir):
+                    predictions_folder_contents = os.listdir(predictions_dir)
+                    for file in predictions_folder_contents:
+                        if "rank_001_alphafold2_multimer_v3" in file:
+                            task_status["folding_status"] = STATUS_COMPLETED
                             task_status["folding_device"] = self.device
+                            break
+
                 local_task_status.append(task_status)
         return local_task_status
 
@@ -115,12 +144,15 @@ class TaskScheduler:
             )
             for job_type in ["msa", "folding"]:
                 if (
-                    local_task[f"{job_type}_status"] == "completed"
-                    and resp_db_task_value[f"{job_type}_status"] != "completed"
+                    local_task[f"{job_type}_status"] == STATUS_COMPLETED
+                    and resp_db_task_value[f"{job_type}_status"] != STATUS_COMPLETED
                 ):
+                    print(
+                        f"Updating {job_type} status for {local_task['file_name']} to {STATUS_COMPLETED}"
+                    )
                     # Update the db with the completed task
                     self.ref.child(resp_db_task_key).child(f"{job_type}_status").set(
-                        "completed"
+                        STATUS_COMPLETED
                     )
                     self.ref.child(resp_db_task_key).child(f"{job_type}_device").set(
                         self.device
@@ -160,7 +192,7 @@ class TaskScheduler:
             f"#PBS -N {fasta_file_name}",
             f"#PBS -e {self.config.hpc_output_dir}/{fasta_file_name}/logs/$PBS_JOBID_msa_local.err",
             f"#PBS -o {self.config.hpc_output_dir}/{fasta_file_name}/logs/$PBS_JOBID_msa_local.out",
-            "exec > >(tee -a $PBS_O_WORKDIR/logs/$PBS_JOBNAME_msa_local.out)",
+            f"exec > >(tee -a {self.config.hpc_output_dir}/{fasta_file_name}/logs/$PBS_JOBNAME_msa_local.out)",
             "cd $PBS_O_WORKDIR",
             'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
             f"conda activate {self.config.hpc_colabfold_conda_env}",
@@ -179,10 +211,152 @@ class TaskScheduler:
                 f.write(command + "\n")
 
         # submit_job
+        # try:
+        #     subprocess.run(f"qsub {job_file_path}", shell=True)
+        # except subprocess.CalledProcessError as e:
+        #     raise Exception(f"Error submitting job on HPC: {e}")
+
+    def submit_job_msa_local_hpc_from_fasta_dir(
+        self, fasta_dir: str, use_templates=True, copy_to_lilibet=True
+    ):
+        """
+        Use this function to submit a batch MSA generation job to the HPC
+        which uses the high throughput mmseqs2 implementation of colabfold
+        which is only setup on cx3 cluster
+
+        Creates an intermediate directory structure
+        Args:
+            fasta_dir (str): Directory containing fasta files to run MSA generation on.
+                This assumes every fasta has one protein (could be multimer).
+            use_templates (bool): Whether to use templates for MSA generation
+            copy_to_lilibet (bool): Whether to copy the results to lilibet
+        """
+        # Check how many files are in the fasta_dir
+        fasta_files = glob.glob(os.path.join(fasta_dir, "*.fasta")) + glob.glob(
+            os.path.join(fasta_dir, "*.fa")
+        )
+        if len(fasta_files) == 0:
+            raise ValueError(f"No fasta files found in {fasta_dir}")
+        else:
+            print(f"Found {len(fasta_files)} fasta files in {fasta_dir}.")
+
+        # Convert the fasta files into a csv file for colabfold_search
+        fasta_data = []
+        for fasta_file in fasta_files:
+            with open(fasta_file, "r") as f:
+                lines = f.readlines()
+                description = lines[0].strip().lstrip(">")
+                sequence = "".join(line.strip() for line in lines[1:])
+                fasta_data.append({"id": description, "seq": sequence})
+
+        df = pd.DataFrame(fasta_data)
+        csv_output_path = os.path.join(fasta_dir, "fasta_contents.csv")
+        df.to_csv(csv_output_path, index=False)
+
+        # mkdir logs and msas
+        logs_dir = os.path.join(self.config.hpc_output_dir, "logs", "msas")
+        msas_dir = os.path.join(self.config.hpc_output_dir, "msas")
+        os.makedirs(logs_dir, exist_ok=True)
+        os.makedirs(msas_dir, exist_ok=True)
+
+        # Check if templates are used
+        if use_templates:
+            use_templates_idx = "1"
+        else:
+            use_templates_idx = "0"
+
+        # Run colabfold_search
+        commands = [
+            "#!/bin/bash",
+            f"#PBS -l select=1:ncpus={self.config.hpc_clf_search_num_cpus}:mem={self.config.hpc_clf_search_mem_gb}gb",
+            f"#PBS -l walltime={self.config.hpc_clf_search_time}",
+            f"#PBS -e {logs_dir}/",
+            f"#PBS -o {logs_dir}/",
+            f"exec > >(tee -a {logs_dir}/"
+            + "$colabfold_search_batch_${PBS_JOBID}.out)",
+            "cd $PBS_O_WORKDIR",
+            'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
+            f"conda activate {self.config.hpc_colabfold_conda_env}",
+            f"colabfold_search {csv_output_path} {self.config.hpc_dbs_loc} {msas_dir} --threads {self.config.hpc_clf_search_num_cpus-4} --use-templates {use_templates_idx} --db-load-mode 2 --use-env 1 --db2 pdb100_230517",
+        ]
+
+        if copy_to_lilibet:
+            commands.append(
+                f"scp -P 10002 -r {msas_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}"
+            )
+
+        job_file_path = os.path.join(logs_dir, f"msa_search.pbs")
+        with open(job_file_path, "w") as f:
+            for command in commands:
+                f.write(command + "\n")
+
+        # submit_job
         try:
             subprocess.run(f"qsub {job_file_path}", shell=True)
         except subprocess.CalledProcessError as e:
             raise Exception(f"Error submitting job on HPC: {e}")
+
+    def submit_job_folding_hpc_cx3(
+        self, job_details: dict, copy_to_lilibet: bool = True, hpc_type: str = "cx3"
+    ):
+        fasta_file_name = job_details["file_name"]
+
+        # Save the fasta file locally
+        fasta_file_full_path = os.path.join(
+            self.config.hpc_output_dir,
+            "input",
+            f"{fasta_file_name}.fasta",
+        )
+        if not os.path.exists(fasta_file_full_path):
+            raise FileNotFoundError(f"Fasta file not found: {fasta_file_full_path}")
+
+        drop_out_str = " --use-dropout" if self.config.colabfold_dropout else ""
+
+        # Check if MSAs exist
+        msa_output_dir = os.path.join(self.config.hpc_output_dir, "msas")
+        if not os.path.exists(msa_output_dir) or len(os.listdir(msa_output_dir)) == 0:
+            raise FileNotFoundError(f"MSAs do not exist for {fasta_file_name}!")
+
+        # Make logs directory if doesn't exist
+        logs_dir = os.path.join(self.config.hpc_output_dir, "logs", fasta_file_name)
+        os.makedirs(logs_dir, exist_ok=True)
+
+        # Make predictions directory
+        predictions_dir = os.path.join(
+            self.config.hpc_output_dir, "predictions", fasta_file_name
+        )
+        os.makedirs(predictions_dir, exist_ok=True)
+
+        # Folding commands
+        commands = [
+            "#!/bin/bash",
+            f"#PBS -l select=1:ncpus={self.config.hpc_folding_job_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1",
+            f"#PBS -l walltime={self.config.hpc_folding_job_time}",
+            f"#PBS -N {fasta_file_name}",
+            f"#PBS -e {self.config.hpc_output_dir}/logs/{fasta_file_name}/",
+            f"#PBS -o {self.config.hpc_output_dir}/logs/{fasta_file_name}/",
+            f"exec > >(tee -a {self.config.hpc_output_dir}/logs/{fasta_file_name}/"
+            + "${PBS_JOBNAME}_${PBS_JOBID}_folding.out)",
+            "cd $PBS_O_WORKDIR",
+            'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
+            f"conda activate {self.config.hpc_colabfold_conda_env}",
+            f"colabfold_batch {fasta_file_full_path} {predictions_dir} --templates --amber --overwrite-existing-results --num-models {self.config.colabfold_num_models} --num-recycle {self.config.colabfold_num_recycle} {drop_out_str}",
+        ]
+        if copy_to_lilibet:
+            commands.append(
+                f"scp -P 10002 -r {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/",
+            )
+
+        job_file_path = os.path.join(logs_dir, f"{fasta_file_name}_folding.pbs")
+        with open(job_file_path, "w") as f:
+            for command in commands:
+                f.write(command + "\n")
+
+        # submit_job
+        # try:
+        #     subprocess.run(f"qsub {job_file_path}", shell=True)
+        # except subprocess.CalledProcessError as e:
+        #     raise Exception(f"Error submitting job on HPC: {e}")
 
     def submit_job_msa_server_lilibet(self, job_details: dict):
         fasta_file_name = job_details["file_name"]
@@ -285,23 +459,43 @@ class TaskScheduler:
             print(f"Finished folding job on lilibet for: {fasta_file_name}")
 
     def run_job(self, job_details: dict, job_type: str):
-        if job_type == "msa":
-            if self.device == "lilibet":
-                self.submit_job_msa_server_lilibet(job_details)
-            elif self.device == "hpc_cx3" or self.device == "hpc_base":
-                self.submit_job_msa_local_hpc_cx3_local(job_details)
+        # Set the job status to queued
+        self.ref.child(self.find_db_task_for_file_name(job_details["file_name"])).child(
+            f"{job_type}_status"
+        ).set("queued")
+        self.ref.child(self.find_db_task_for_file_name(job_details["file_name"])).child(
+            f"{job_type}_device"
+        ).set(self.device)
+
+        # Submit the job
+        if job_type == JOB_TYPE_MSA:
+            if self.device == DEVICE_LILIBET:
+                job_status = self.submit_job_msa_server_lilibet(job_details)
+            elif self.device == DEVICE_HPC_CX3 or self.device == DEVICE_HPC_BASE:
+                job_status = self.submit_job_msa_local_hpc_cx3_local(job_details)
             else:
                 raise ValueError(
                     f"MSAs on other devices not implemented yet: {self.device}"
                 )
 
         elif job_type == "folding":
-            if self.device == "lilibet":
-                self.submit_job_folding_lilibet(job_details)
+            if self.device == DEVICE_LILIBET:
+                job_status = self.submit_job_folding_lilibet(job_details)
             else:
                 raise ValueError(
                     f"Folding on other devices not implemented yet: {self.device}"
                 )
+        if job_status is True:
+            self.ref.child(
+                self.find_db_task_for_file_name(job_details["file_name"])
+            ).child(f"{job_type}_status").set(STATUS_COMPLETED)
+        else:
+            self.ref.child(
+                self.find_db_task_for_file_name(job_details["file_name"])
+            ).child(f"{job_type}_status").set(STATUS_NOT_STARTED)
+            self.ref.child(
+                self.find_db_task_for_file_name(job_details["file_name"])
+            ).child(f"{job_type}_device").set(STATUS_UNASSIGNED)
 
 
 if __name__ == "__main__":
@@ -310,17 +504,33 @@ if __name__ == "__main__":
     @option("--config_file_path", help="Path to the config file")
     @option("--device", default="lilibet", help="Device to run the scheduler on")
     @option("--max_jobs", default=100, help="Max number of jobs to run")
-    @option("--task_type", default="folding", help="Type of task to run")
+    @option(
+        "--task_type",
+        default="folding",
+        help="Type of task to run. Choose between 'folding' and 'msa'",
+    )
     def run_scheduler(
         config_file_path: str, device_name: str, max_jobs: int, task_type: str
     ):
         # Initialize the TaskScheduler
         ts = TaskScheduler(config_file_path, device_name)
 
-        print("Starting Scheduler")
+        print("Starting Scheduler...")
         for job_idx in range(1, max_jobs + 1):
             # Obtain the task which isn't started yet.
-            db_tasks = ts.get_tasks_by_filter({f"{task_type}_status": "not_started"})
+            if task_type == JOB_TYPE_MSA:
+                filter_criteria = {
+                    "msa_status": STATUS_NOT_STARTED,
+                }
+            elif task_type == JOB_TYPE_FOLDING:
+                filter_criteria = {
+                    "folding_status": STATUS_NOT_STARTED,
+                    "msa_status": STATUS_COMPLETED,
+                }
+            else:
+                raise ValueError(f"Unknown task type: {task_type}")
+
+            db_tasks = ts.get_tasks_by_filter(filter_criteria)
             if len(db_tasks) == 0:
                 print("No tasks to run")
                 break
