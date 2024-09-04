@@ -1,5 +1,6 @@
 .env
 test.*
+.ipynb_checkpoints/
 outputs/
 logs/
 __pycache__/
