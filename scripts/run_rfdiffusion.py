@@ -4,7 +4,7 @@ import subprocess
 from dotenv import load_dotenv
 
 # load .env
-load_dotenv()
+load_dotenv(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.env")
 
 # Create the parser
 parser = argparse.ArgumentParser()
@@ -14,6 +14,7 @@ parser.add_argument(
     "--num_designs", type=int, help="Number of RF designs to generate", default=100
 )
 parser.add_argument("--job_name", type=str, help="job_name", required=True)
+parser.add_argument("--pdb_file_path", type=str, help="pdb file path", required=True)
 parser.add_argument(
     "--hotspot_residues", type=str, help="Hotspot residues", required=True
 )
@@ -51,54 +52,58 @@ def make_latest_dir(job_name):
             [int(file.split("_")[-1].replace("v", "")) for file in created_versions]
         )
         folder_path = os.path.join(dir_path, f"{job_name}_v{latest_repo + 1}")
-
-    print(f"\nMaking folder: {folder_path}\n")
     os.makedirs(folder_path)
     return folder_path
 
 
 if __name__ == "__main__":
 
-    # Load the .parser file
-    num_designs = args.num_designs
-    job_name = args.job_name
-    hotspot_residues = args.hotspot_residues
-    contigs = args.contigs
+    try:
 
-    rf_diff_repo_path = os.getenv("RF_DIFFUSION_REPO_PATH")
+        # Load the .parser file
+        num_designs = args.num_designs
+        job_name = args.job_name
+        hotspot_residues = args.hotspot_residues
+        contigs = args.contigs
+        input_pdb_path = args.pdb_file_path
 
-    # make output dir what's needed
-    folder_path = make_latest_dir(job_name)
-    input_pdb_path = os.path.join(BASE_PATH, "inputs/mrp_2_complex.pdb")
+        rf_diff_repo_path = os.getenv("RF_DIFFUSION_REPO_PATH")
+        print(rf_diff_repo_path)
 
-    commands = [
-        f"source {os.getenv('CONDA_PATH')}",
-        f"conda activate {os.getenv('RFDIFF_ENV')}",
-        f"cd {os.getenv('RF_DIFFUSION_REPO_PATH')}",
-        f"CUDA_VISIBLE_DEVICES={args.cuda_device_id}",
-        f'scripts/run_inference.py inference.output_prefix={folder_path} inference.input_pdb={input_pdb_path} "contigmap.contigs={args.contigs}" inference.num_designs={args.num_designs} "ppi.hotspot_res={args.hotspot_residues}"',
-    ]
+        # make output dir what's needed
+        folder_path = make_latest_dir(job_name)
 
-    if args.logs_dir:
-        logs_dir = os.path.join(
-            args.logs_dir, f"rfdiffusion/{folder_path.split('/')[-1]}"
-        )
-        print(f"\nSaving logs to: {logs_dir}\n")
-        os.makedirs(logs_dir, exist_ok=True)
+        commands = [
+            f"source {os.getenv('CONDA_PATH')}",
+            f"conda activate {os.getenv('RFDIFF_ENV')}",
+            f"cd {os.getenv('RF_DIFFUSION_REPO_PATH')}",
+            f"export CUDA_VISIBLE_DEVICES={args.cuda_device_id}",
+            f'scripts/run_inference.py inference.output_prefix={folder_path} inference.input_pdb={input_pdb_path} "contigmap.contigs={args.contigs}" inference.num_designs={args.num_designs} inference.write_trajectory=False',
+        ]
 
-        with open(os.path.join(logs_dir, "stdout.txt"), "w") as stdout_file, open(
-            os.path.join(logs_dir, "stderr.txt"), "w"
-        ) as stderr_file:
-
-            # Save outputs to log file
-            subprocess.run(
-                ["bash", "-c", "\n".join(commands)],
-                stdout=stdout_file,
-                stderr=stderr_file,
-                text=True,
+        if args.logs_dir:
+            logs_dir = os.path.join(
+                args.logs_dir, f"rfdiffusion/{folder_path.split('/')[-1]}"
             )
+            print(f"Saving logs to: {logs_dir}")
+            os.makedirs(logs_dir, exist_ok=True)
 
-    else:
-        subprocess.run(["bash", "-c", "\n".join(commands)], text=True)
+            with open(os.path.join(logs_dir, "stdout.txt"), "w") as stdout_file, open(
+                os.path.join(logs_dir, "stderr.txt"), "w"
+            ) as stderr_file:
 
-    print("\nFINISHED!\n")
+                print("Running Job: ", folder_path.split("/")[-1])
+                # Save outputs to log file
+                subprocess.run(
+                    ["bash", "-c", "\n".join(commands)],
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    text=True,
+                )
+
+        else:
+            subprocess.run(["bash", "-c", "\n".join(commands)], text=True)
+
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt")
+    print("FINISHED!")

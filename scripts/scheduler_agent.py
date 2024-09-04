@@ -12,8 +12,8 @@ import numpy as np
 # load .env
 load_dotenv()
 
-CHAIN_B_DESC = "\n>ChainB|common_chain|MRP-2"
-CHAIN_B_SEQ = "\nMFPLVRELVCGDKTELLEPGWKNRSSIPHVTKCGQHTDFSTIPTLFLVVFSFIVIYQLLHTRTAQLRCFSPISFRIILGCLLVVDLIATVIYDLYLYVSQSPNFEVVHFYGDLVQFGGICLALILTVACKNKGIITSGVITLYWLLVVVCGIPEFRFYLSGFIYNEYALEGIRATLYIIAFTFSALELFLCCFADVPSDMYKSESSCPEYTASFINRLTFQWFTGLAYLGNKKSLENEDLWDLNEIDKAENLIPSFMQNLKPRIDEYHQNIKKDPSAALPKNHPSFVIPIFKTYKYTLLAGFFYKLCFDMLQFLAPQLLKQLIGFIEDKNQPVWIGCSIVGIMFFSSFLQSMFLHQYYHSMFRLGMHVRSVLTSAVYSKALNLSNEARKGKTIGAIVNLMSVDIQKIQDMAPTIMLFWSAPLQIFLSIYFLWKFLGVAALAGLVVLILALPVNGLIAIQMRKCQTEQMKLKDERIKMMSEILNGMKVLKLYSWERSMENMVLKIRERELHILKKLSYFMAAIVFSWICAPFLASVISFVVYVYLDPENNVLTPEITFVALSLFDILRMPLAMVAMVYGEAVQCSVSNTRLKEFFAAEEMSPQTSISHGETDSAIEVENGLFSWSSDEDPTLREISFKIQKGQLVAIVGKVGSGKSSLLHALLGEMNKLSGSVQINGNIAYVPQQAWIQNMSLRNNILFNKPYDLENYEDVVKNCALKEDLANLPAGDRTEIGEKGINLSGGQKQRVSLARAVYQNPDIILLDDPLSAVDSHVGKHIFENVISSSTGCLASKTRVLVTHGLTYLKHCDQLIVLKEGTISELGTYQELLNNSGAFAEFLEEFLIEESKTRGRVASIGDGSGEVDEILRDLGQVKPGILKRLESHLSQESDKEDTSARAIEYSRDSSRRSVLLHSPRSQHEENEALLGAISEDVPAQENTQLIEKETVETGKVKFEVYIAYFQAISIPITLLFFFLYVGSSGLGILSNFYLAKLSDHAKSGNRTSSDAKMELGIYAVLGMGQSFVVLIASIILTIGVLRASRILHAGLLGNIMRSPMAFFDVTPIGRILNRIGKDIEAIDRTLPDVIRHMSMTIFNVVATLVVIMWATPWAGIAFAILSVIYFIVLRFYISTSRQLKRLESASRSPIYSHFQESIQGASSIRAFGVVDNFIKQSQQRVDDHLIAYYPSIVANRWLAVRLEMVGNLIVLSAAGAAVYFRDSPGLSAGLVGLSVSYALNITQTLNWAVRMTSELETNIVSVERIKEYTVTPTEGNNSRRLAAKSWPEKGEISIKNFSVRYRPGLDLVLHGISAHIAPSEKVGIVGRTGAGKSSLTLALFRIIEADGGSIEIDGINIANLQLEQLRSCLTIVPQDPVLFSGTMKMNLDPFSAYSDSQVWEALENAHLKPFVKSLQDGLEHKISEGGENLSVGQRQLICLARALLRKTKVLVLDEAAAAVDVETDSLIQKTIREQFKECTVLTIAHRLNTVMDSDRLLVLDKGRVAEFDSPKNLLANPDGIFYSMAKDANVV"
+CHAIN_B_DESC = ">ChainB|common_chain|MRP-2"
+CHAIN_B_SEQ = "MFPLVRELVCGDKTELLEPGWKNRSSIPHVTKCGQHTDFSTIPTLFLVVFSFIVIYQLLHTRTAQLRCFSPISFRIILGCLLVVDLIATVIYDLYLYVSQSPNFEVVHFYGDLVQFGGICLALILTVACKNKGIITSGVITLYWLLVVVCGIPEFRFYLSGFIYNEYALEGIRATLYIIAFTFSALELFLCCFADVPSDMYKSESSCPEYTASFINRLTFQWFTGLAYLGNKKSLENEDLWDLNEIDKAENLIPSFMQNLKPRIDEYHQNIKKDPSAALPKNHPSFVIPIFKTYKYTLLAGFFYKLCFDMLQFLAPQLLKQLIGFIEDKNQPVWIGCSIVGIMFFSSFLQSMFLHQYYHSMFRLGMHVRSVLTSAVYSKALNLSNEARKGKTIGAIVNLMSVDIQKIQDMAPTIMLFWSAPLQIFLSIYFLWKFLGVAALAGLVVLILALPVNGLIAIQMRKCQTEQMKLKDERIKMMSEILNGMKVLKLYSWERSMENMVLKIRERELHILKKLSYFMAAIVFSWICAPFLASVISFVVYVYLDPENNVLTPEITFVALSLFDILRMPLAMVAMVYGEAVQCSVSNTRLKEFFAAEEMSPQTSISHGETDSAIEVENGLFSWSSDEDPTLREISFKIQKGQLVAIVGKVGSGKSSLLHALLGEMNKLSGSVQINGNIAYVPQQAWIQNMSLRNNILFNKPYDLENYEDVVKNCALKEDLANLPAGDRTEIGEKGINLSGGQKQRVSLARAVYQNPDIILLDDPLSAVDSHVGKHIFENVISSSTGCLASKTRVLVTHGLTYLKHCDQLIVLKEGTISELGTYQELLNNSGAFAEFLEEFLIEESKTRGRVASIGDGSGEVDEILRDLGQVKPGILKRLESHLSQESDKEDTSARAIEYSRDSSRRSVLLHSPRSQHEENEALLGAISEDVPAQENTQLIEKETVETGKVKFEVYIAYFQAISIPITLLFFFLYVGSSGLGILSNFYLAKLSDHAKSGNRTSSDAKMELGIYAVLGMGQSFVVLIASIILTIGVLRASRILHAGLLGNIMRSPMAFFDVTPIGRILNRIGKDIEAIDRTLPDVIRHMSMTIFNVVATLVVIMWATPWAGIAFAILSVIYFIVLRFYISTSRQLKRLESASRSPIYSHFQESIQGASSIRAFGVVDNFIKQSQQRVDDHLIAYYPSIVANRWLAVRLEMVGNLIVLSAAGAAVYFRDSPGLSAGLVGLSVSYALNITQTLNWAVRMTSELETNIVSVERIKEYTVTPTEGNNSRRLAAKSWPEKGEISIKNFSVRYRPGLDLVLHGISAHIAPSEKVGIVGRTGAGKSSLTLALFRIIEADGGSIEIDGINIANLQLEQLRSCLTIVPQDPVLFSGTMKMNLDPFSAYSDSQVWEALENAHLKPFVKSLQDGLEHKISEGGENLSVGQRQLICLARALLRKTKVLVLDEAAAAVDVETDSLIQKTIREQFKECTVLTIAHRLNTVMDSDRLLVLDKGRVAEFDSPKNLLANPDGIFYSMAKDANVV"
 TABLE_NAME = "parafold_jobs_table"
 TABLE_COLUMNS = [
     "file_name",
@@ -23,30 +23,41 @@ TABLE_COLUMNS = [
     "folding_device",
 ]
 ARTIFACT_NAME = "parafold_jobs"
+STATUS_COMPLETED = "completed"
+STATUS_NOT_STARTED = "not_started"
+STATUS_IN_PROGRESS = "in_progress"
+DEVICE_NONE = "none"
 
 
 class Scheduler:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
-        self.wandb = wandb.init(project=os.getenv("WANDB_PROJECT_NAME"))
-        self.output_file_dir = os.getenv("OUTPUT_DIR_PATH")
+        self.output_file_dir = self.args.output_dir
 
     def add_common_chain_to_fasta(self, fasta_file_path: str):
         with open(fasta_file_path, "r") as f:
             fasta_content = f.readlines()
 
-        if len(fasta_content) == 2:
-            with open(fasta_file_path, "a") as f:
-                f.write(CHAIN_B_DESC)
-                f.write(CHAIN_B_SEQ)
-        elif len(fasta_content) == 4:
-            print("\n Common Chain already exists\n")
+        filtered_fasta_content = [
+            line.strip() for line in fasta_content if line != "\n"
+        ]
+
+        if len(filtered_fasta_content) == 2:
+            filtered_fasta_content += [CHAIN_B_DESC, CHAIN_B_SEQ]
+            with open(fasta_file_path, "w") as f:
+                f.write("\n".join(filtered_fasta_content))
+
+        elif len(filtered_fasta_content) == 4:
+            print("Common Chain already exists")
+
         else:
-            print("\nFasta file has more than 2 sequences\n")
+            print("Fasta file has more than 2 sequences")
 
     def get_fasta_file_paths(self):
         # check both .fasta and .fa files
-        prot_mpnn_out_files = os.path.join(os.getenv("OUTPUT_DIR_PATH"), "protein_mpnn")
+        prot_mpnn_out_files = os.path.join(
+            self.output_file_dir, "ligand_mpnn/processed"
+        )
         fasta_files = glob.glob(f"{prot_mpnn_out_files}/*.fasta") + glob.glob(
             f"{prot_mpnn_out_files}/*.fa"
         )
@@ -61,17 +72,15 @@ class Scheduler:
         else:
             print("Invalid fasta file")
         # TODO: Remove outmulti once sto is done
-        out_path = trimmed_fasta_dirname.replace("protein_mpnn/", "parafold/")
+        out_path = trimmed_fasta_dirname.replace("ligand_mpnn/processed/", "parafold/")
         return out_path
 
     def submit_job_lilibet(self, fasta_file_dir, job_type="folding"):
         final_output_dir = self.obtain_parafold_out_path(fasta_file_dir)
-        common_chain_msa_path = os.path.join(
-            os.getenv("OUTPUT_DIR_PATH"), "mrp_2_msas/msas"
-        )
+        common_chain_msa_path = self.args.common_chain_msa_path
 
         if job_type == "folding":
-            af_multimer_command = f"bash run_alphafold.sh -d {os.getenv('AFDB_PATH')} -o {os.path.dirname(final_output_dir)} -m model_1_multimer_v3 -p multimer -i {fasta_file_dir} -t 2020-12-01 -Y common_chain -Z {common_chain_msa_path} -u {self.args.gpu_id} -r best"
+            af_multimer_command = f"bash run_alphafold.sh -d {os.getenv('AFDB_PATH')} -o {os.path.dirname(final_output_dir)} -m model_1_multimer_v3,model_2_multimer_v3,model_3_multimer_v3 -p multimer -i {fasta_file_dir} -t 2020-12-01 -Y common_chain -Z {common_chain_msa_path} -u {self.args.gpu_id} -r best -N {self.args.num_preds_per_input}"
         else:
             af_multimer_command = f"bash run_alphafold.sh -d {os.getenv('AFDB_PATH')} -o {final_output_dir} -m model_1_multimer_v3 -p multimer -i {fasta_file_dir} -t 2020-12-01"
 
@@ -130,25 +139,30 @@ class Scheduler:
             out_file_dir = self.obtain_parafold_out_path(fasta_file)
 
             # check msa_gen status
-            msa_status = "not_started"
-            msa_device = "none"
+            msa_status = STATUS_NOT_STARTED
+            msa_device = DEVICE_NONE
 
-            chain_id_map_path = os.path.join(out_file_dir, "msas/chain_id_map.json")
-            if os.path.isfile(chain_id_map_path):
-                with open(chain_id_map_path, "r") as f:
-                    chain_id_map = json.load(f)
-                if len(chain_id_map) == 2:
-                    msa_status = "completed"
-                    msa_device = self.args.device
+            features_pkl_path = os.path.join(out_file_dir, "features.pkl")
+            if os.path.isfile(features_pkl_path):
+                # with open(chain_id_map_path, "r") as f:
+                #     chain_id_map = json.load(f)
+                # # if len(chain_id_map) == 2:
+                msa_status = STATUS_COMPLETED
+                msa_device = self.args.device
 
             # check GPU status
             ranking_debug_file_path = os.path.join(out_file_dir, "ranking_debug.json")
             if os.path.isfile(ranking_debug_file_path):
-                folding_status = "completed"
+                folding_status = STATUS_COMPLETED
                 folding_device = self.args.device
+
+            elif os.path.isfile(os.path.join(out_file_dir, "running.txt")):
+                folding_status = STATUS_IN_PROGRESS
+                folding_device = self.args.device
+
             else:
-                folding_status = "not_started"
-                folding_device = "none"
+                folding_status = STATUS_NOT_STARTED
+                folding_device = DEVICE_NONE
 
             # file_name, msa_status, msa_device, folding_status, folding_device
             table.append(
@@ -171,7 +185,7 @@ class Scheduler:
         artifact.add(table_to_upload, table_name)
         wandb.log_artifact(artifact)
 
-    def sync_table(self):
+    def sync_table(self, force=False):
         # Retrieve the table from wandb
         wandb_table = self.retrieve_wandb_jobs()
         print(f"Total Wandb jobs: {len(wandb_table)}")
@@ -190,17 +204,31 @@ class Scheduler:
                 wandb_job_idx = wandb_job_names.index(job)
                 for j_type in ["msa", "folding"]:
                     if (
-                        wandb_table[wandb_job_idx][f"{j_type}_status"] != "completed"
+                        wandb_table[wandb_job_idx][f"{j_type}_status"]
+                        != STATUS_COMPLETED
                         and local_table[local_job_idx][f"{j_type}_status"]
-                        == "completed"
+                        == STATUS_COMPLETED
                     ):
-                        print(f"Making {job} as complete in wandb table...")
+                        print(f"Making {j_type} {job} as complete in wandb table...")
                         wandb_table[wandb_job_idx][f"{j_type}_status"] = local_table[
                             local_job_idx
                         ][f"{j_type}_status"]
                         wandb_table[wandb_job_idx][
                             f"{j_type}_device"
                         ] = self.args.device
+
+                    if (
+                        force == True
+                        and wandb_table[wandb_job_idx][f"{j_type}_status"]
+                        == STATUS_IN_PROGRESS
+                        and local_table[local_job_idx][f"{j_type}_status"]
+                        == STATUS_NOT_STARTED
+                    ):
+                        print(f"Making {job} as not_started in wandb table...")
+                        wandb_table[wandb_job_idx][
+                            f"{j_type}_status"
+                        ] = STATUS_NOT_STARTED
+                        wandb_table[wandb_job_idx][f"{j_type}_device"] = DEVICE_NONE
 
             # If job not found in wandb_table, add it
             else:
@@ -210,6 +238,7 @@ class Scheduler:
         self.upload_table_wandb(wandb_table)
 
     def update_table(self, table: np.array, file_name: str, status: str, job_type: str):
+        print(f"Updating {file_name} {job_type} status to {status}...")
         # update row in the table
         for row_idx, row in enumerate(table):
             if row["file_name"] == file_name:
@@ -221,38 +250,43 @@ class Scheduler:
         # check msa_gen status
         feat_pkl_file = os.path.join(out_file_dir, "features.pkl")
         uniprot_sto_file = os.path.join(out_file_dir, "msas/A/uniprot_hits.sto")
-        if (
-            os.path.exists(feat_pkl_file)
-            and os.path.isfile(feat_pkl_file)
-            and os.path.isfile(uniprot_sto_file)
-        ):
-            return True
-        else:
-            return False
+        chain_id_map_path = os.path.join(out_file_dir, "msas/chain_id_map.json")
+        if os.path.isfile(chain_id_map_path):
+            with open(chain_id_map_path, "r") as f:
+                chain_id_map = json.load(f)
+            if (
+                len(chain_id_map) == 2
+                and os.path.isfile(feat_pkl_file)
+                and os.path.isfile(uniprot_sto_file)
+            ):
+                return True
+        return False
 
     def sync_msas(self, msa_folder_path: str, from_device: str, to_device: str):
         if from_device == to_device:
-            print("From and to device are same. No need to sync")
+            pass
+            # print("From and to device are same. No need to sync")
 
         if to_device == "lilibet":
             if from_device == "hpc":
                 print("Syncing from hpc to lilibet")
 
-                if not os.path.exists(msa_folder_path):
-                    print(f"Creating output directory: {msa_folder_path}")
-                    os.makedirs(msa_folder_path)
+                if os.path.exists(msa_folder_path):
+                    print(f"Deleting existing output directory: {msa_folder_path}")
+                    subprocess.run(f"rm -r {msa_folder_path}", shell=True)
 
                 hpc_path = msa_folder_path.replace(
                     os.getenv("LILIBET_BASE"), os.getenv("HPC_BASE")
                 )
 
                 subprocess.run(
-                    f"sshpass -p {os.getenv('PASSWORD_HPC')} scp -ru {os.getenv('HPC_SERVER')}:{hpc_path} {os.path.dirname(msa_folder_path)}",
+                    f"sshpass -p {os.getenv('PASSWORD_HPC')} scp -r {os.getenv('HPC_SERVER')}:{hpc_path} {os.path.dirname(msa_folder_path)}",
                     shell=True,
                 )
 
-    def main(self, job_type: str, max_jobs=1, sleep_duration_sec=60):
-        # OUTPUT_DIR_PATH = os.getenv("OUTPUT_DIR_PATH")
+    def main(
+        self, job_type: str, max_jobs=1, sleep_duration_sec=60, sleep_counter_max=10
+    ):
         fasta_files_local = self.get_fasta_file_paths()
         fasta_file_names = [
             file.split("/")[-1].replace(".fasta", "").replace(".fa", "")
@@ -260,30 +294,24 @@ class Scheduler:
         ]
 
         job_idx = 0
+        sleep_counter = 0
         while job_idx <= max_jobs:
             print(f"\nJob Idx: {job_idx}: Checking for jobs to submit...\n")
 
             # sync and retrieve current jobs
-            self.sync_table()
-            curr_wandb_jobs = self.retrieve_wandb_jobs()
+            curr_local_jobs = self.retrieve_local_jobs()
 
-            for job in curr_wandb_jobs:
+            job_found = False
+            for job in curr_local_jobs:
                 # folding job
                 if (
                     job_type == "folding"
-                    and job["msa_status"] == "completed"  # completed msa generation
-                    and job["folding_status"] == "not_started"  # not started folding
-                ) or (
-                    job_type == "msa"
-                    and job["msa_status"] == "not_started"  # incomplete msa generation
-                    and job["folding_status"] == "not_started"  # not started folding
+                    and job["msa_status"]
+                    == STATUS_COMPLETED  # completed msa generation
+                    and job["folding_status"]
+                    == STATUS_NOT_STARTED  # not started folding
                 ):
-                    self.update_table(
-                        table=curr_wandb_jobs,
-                        file_name=job["file_name"],
-                        status="in_progress",
-                        job_type=job_type,
-                    )
+                    job_found = True
                     full_inp_path = fasta_files_local[
                         fasta_file_names.index(job["file_name"])
                     ]
@@ -298,21 +326,37 @@ class Scheduler:
                             to_device=self.args.device,
                         )
                     # TODO: Submit Job
-                    print(f"\nJob Idx: {job_idx}: Submitting {job['file_name']} \n")
+                    print(f"Job Idx: {job_idx}: Submitting {job['file_name']} ")
 
-                    self.add_common_chain_to_fasta(full_inp_path)
+                    # self.add_common_chain_to_fasta(full_inp_path)
+                    # create a running.txt to mark it running
+                    running_txt_path = os.path.join(
+                        self.obtain_parafold_out_path(full_inp_path), "running.txt"
+                    )
+                    with open(running_txt_path, "w") as f:
+                        f.write("")
+
                     self.submit_job_lilibet(
                         fasta_file_dir=full_inp_path,
                         job_type=job_type,
                     )
+                    # Remove running.txt
+                    if os.path.exists(running_txt_path):
+                        os.remove(running_txt_path)
+
                     print(f"\nFinished Job: {job['file_name']} \n")
                     job_idx += 1
                     break
+            if sleep_counter == sleep_counter_max:
+                print("Sleep Counter Max Reached. Exiting...")
+                return None
+            if job_found == False:
+                sleep_counter += 1
+                print(
+                    f"Found no relevant jobs... Sleeping for {sleep_duration_sec} seconds..."
+                )
+                time.sleep(sleep_duration_sec)
 
-            print(
-                f"Found no relevant jobs... Sleeping for {sleep_duration_sec} seconds..."
-            )
-            time.sleep(sleep_duration_sec)
         print("\nAll Jobs Finished!")
 
 
@@ -332,6 +376,13 @@ if __name__ == "__main__":
         "--logs_dir",
         type=str,
         help="Path to logs_dir.",
+        required=True,
+    )
+
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        help="Path to output dir.",
         required=True,
     )
 
@@ -361,6 +412,20 @@ if __name__ == "__main__":
         default=0,
     )
 
+    parser.add_argument(
+        "--common_chain_msa_path",
+        type=str,
+        help="Common Chain MSA Path",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--num_preds_per_input",
+        type=int,
+        help="Number of Predictions per input",
+        default=2,
+    )
+
     args = parser.parse_args()
     scheduler = Scheduler(args)
 
@@ -373,5 +438,4 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         print("Interrupted by user")
-        scheduler.sync_table()
         print("Exiting...")
