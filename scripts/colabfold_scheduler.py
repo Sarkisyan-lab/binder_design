@@ -7,6 +7,7 @@ import pandas as pd
 from argparse import Namespace
 from click import command, option
 import json
+import time
 
 # constants
 STATUS_UNASSIGNED = "unassigned"
@@ -18,6 +19,7 @@ DEVICE_HPC_BASE = "hpc_base"
 DEVICE_JEX = "jex"
 JOB_TYPE_MSA = "msa"
 JOB_TYPE_FOLDING = "folding"
+HPC_CX3_USER = "ha1822"
 
 
 class TaskScheduler:
@@ -343,33 +345,50 @@ class TaskScheduler:
         return logs_dir, predictions_dir, msa_output_dir, fasta_file_full_path
 
     def submit_job_folding_hpc_cx3(
-        self, job_details: dict, copy_to_lilibet: bool = True
+        self, job_details_list: list, copy_to_lilibet: bool = True
     ):
-        fasta_file_name = job_details["file_name"]
-        # Check if fasta exists locally
-        logs_dir, predictions_dir, msa_output_dir, fasta_file_full_path = (
-            self.job_housekeeping(job_details, device=DEVICE_HPC_CX3)
+        print(
+            f"Running Folding for {len(job_details_list)} sequences on lilibet parallely"
         )
-        drop_out_str = " --use-dropout" if self.config.colabfold_dropout else ""
+        fold_cmd = []
+        scp_cmd = [] if copy_to_lilibet else None
+        for job_details in job_details_list:
+            fasta_file_name = job_details["file_name"]
+            logs_dir, predictions_dir, msa_output_dir, fasta_file_full_path = (
+                self.job_housekeeping(job_details, device=DEVICE_HPC_CX3)
+            )
+            msa_file_path = os.path.join(msa_output_dir, f"{fasta_file_name}.a3m")
+            template_file_path = os.path.join(
+                msa_output_dir, f"{fasta_file_name}_pdb100_230517.m8"
+            )
+            drop_out_str = "--use-dropout" if self.config.colabfold_dropout else ""
+            fold_cmd.append(
+                f"colabfold_batch {msa_file_path} {predictions_dir} --num-recycle {self.config.colabfold_num_recycle} --num-models {self.config.colabfold_num_models} {drop_out_str}"
+            )
+            if copy_to_lilibet:
+                scp_cmd.append(
+                    f"scp -r -P 10002 {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/"
+                )
+        fold_cmd_str = " & ".join(fold_cmd)
+        scp_cmd_str = " & ".join(scp_cmd) if copy_to_lilibet else None
+
         # Folding commands
         commands = [
             "#!/bin/bash",
             f"#PBS -l select=1:ncpus={self.config.hpc_folding_job_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1",
             f"#PBS -l walltime={self.config.hpc_folding_job_time}",
             f"#PBS -N {fasta_file_name}",
-            f"#PBS -e {self.config.hpc_output_dir}/logs/{fasta_file_name}/",
-            f"#PBS -o {self.config.hpc_output_dir}/logs/{fasta_file_name}/",
-            f"exec > >(tee -a {self.config.hpc_output_dir}/logs/{fasta_file_name}/"
-            + "${PBS_JOBNAME}_${PBS_JOBID}_folding.out)",
+            f"#PBS -e {logs_dir}/",
+            f"#PBS -o {logs_dir}/",
+            f"exec > >(tee -a {logs_dir}/" + "${PBS_JOBNAME}_${PBS_JOBID}_folding.out)",
             "cd $PBS_O_WORKDIR",
             'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
             f"conda activate {self.config.hpc_colabfold_conda_env}",
-            f"colabfold_batch {fasta_file_full_path} {predictions_dir} --templates --amber --overwrite-existing-results --num-models {self.config.colabfold_num_models} --num-recycle {self.config.colabfold_num_recycle} {drop_out_str}",
+            fold_cmd_str,
+            "wait",
         ]
-        if copy_to_lilibet:
-            commands.append(
-                f"scp -P 10002 -r {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/",
-            )
+        if scp_cmd_str:
+            commands.append(scp_cmd_str)
 
         job_file_path = os.path.join(logs_dir, f"{fasta_file_name}_folding.pbs")
         with open(job_file_path, "w") as f:
@@ -377,10 +396,11 @@ class TaskScheduler:
                 f.write(command + "\n")
 
         # submit_job
-        # try:
-        #     subprocess.run(f"qsub {job_file_path}", shell=True)
-        # except subprocess.CalledProcessError as e:
-        #     raise Exception(f"Error submitting job on HPC: {e}")
+        try:
+            subprocess.run(f"qsub {job_file_path}", shell=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Error submitting job on HPC: {e}")
+        return True
 
     def submit_job_folding_lilibet(self, job_details_list: list):
         print(
@@ -397,8 +417,9 @@ class TaskScheduler:
             template_file_path = os.path.join(
                 msa_output_dir, f"{fasta_file_name}_pdb100_230517.m8"
             )
+            drop_out_str = " --use-dropout" if self.config.colabfold_dropout else ""
             fold_cmd.append(
-                f"colabfold_batch {msa_file_path} {predictions_dir} --num-recycle {self.config.colabfold_num_recycle} --num-models {self.config.colabfold_num_models}"
+                f"colabfold_batch {msa_file_path} {predictions_dir} --num-recycle {self.config.colabfold_num_recycle} --num-models {self.config.colabfold_num_models} {drop_out_str}"
             )
             # scp_cmd.append(
             #     f"scp -r -P 10002 {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/"
@@ -430,6 +451,35 @@ class TaskScheduler:
             print("Finished folding on lilibet")
         return True
 
+    @staticmethod
+    def return_cx3_queue_status(queue_name="v1_gpu72"):
+        """
+        Returns the number of running and queued jobs in the specified queue.
+        """
+        running_jobs = subprocess.run(
+            ["qstat", "-r", "-u", "ha1822", queue_name],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+
+        running_job_count = sum(
+            1
+            for line in running_jobs.splitlines()
+            if line.strip() and line[0].isdigit()
+        )
+
+        queued_jobs = subprocess.run(
+            ["qstat", "-i", "-u", "ha1822", queue_name],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        queued_job_count = sum(
+            1 for line in queued_jobs.splitlines() if line.strip() and line[0].isdigit()
+        )
+        return running_job_count, queued_job_count
+
     def run_job(self, job_details_list: list):
         # Set the job status to queued
         for job_details in job_details_list:
@@ -444,6 +494,8 @@ class TaskScheduler:
         # Submit the job
         if self.device == DEVICE_LILIBET:
             job_status = self.submit_job_folding_lilibet(job_details_list)
+        elif self.device == DEVICE_HPC_CX3:
+            job_status = self.submit_job_folding_hpc_cx3(job_details_list)
         else:
             raise ValueError(
                 f"Folding on other devices not implemented yet: {self.device}"
@@ -451,19 +503,30 @@ class TaskScheduler:
 
         # Update the job status if the job finished successfully
         for job_details in job_details_list:
-            if job_status:
-                print(f"Setting {job_details['file_name']} to completed")
-                self.ref.child(
-                    self.find_db_id_for_file_name(job_details["file_name"])
-                ).child(f"folding_status").set(STATUS_COMPLETED)
-            else:
-                print(f"Setting {job_details['file_name']} to not started")
-                self.ref.child(
-                    self.find_db_id_for_file_name(job_details["file_name"])
-                ).child(f"folding_status").set(STATUS_NOT_STARTED)
-                self.ref.child(
-                    self.find_db_id_for_file_name(job_details["file_name"])
-                ).child(f"folding_device").set(STATUS_UNASSIGNED)
+            if self.device == DEVICE_LILIBET:
+                if job_status:
+                    print(f"Setting {job_details['file_name']} to completed")
+                    self.ref.child(
+                        self.find_db_id_for_file_name(job_details["file_name"])
+                    ).child(f"folding_status").set(STATUS_COMPLETED)
+                else:
+                    print(f"Setting {job_details['file_name']} to not started")
+                    self.ref.child(
+                        self.find_db_id_for_file_name(job_details["file_name"])
+                    ).child(f"folding_status").set(STATUS_NOT_STARTED)
+                    self.ref.child(
+                        self.find_db_id_for_file_name(job_details["file_name"])
+                    ).child(f"folding_device").set(STATUS_UNASSIGNED)
+
+    def sleep_and_update_db(self, sleep_itvl_mins: int):
+        # Update db if any new jobs are completed
+        local_tasks_status = self.get_local_tasks_status(
+            fasta_dir=os.path.join(self.config.lilibet_output_dir, "input")
+        )
+        self.update_db_with_completed_local_tasks(local_tasks_status)
+
+        # Sleep for some time
+        time.sleep(sleep_itvl_mins * 60)
 
 
 @command()
@@ -471,6 +534,29 @@ class TaskScheduler:
 @option("--device_name", default="lilibet", help="Device to run the scheduler on")
 @option("--max_jobs", default=100, help="Max number of jobs to run")
 @option("--num_jobs_per_gpu", default=2, help="Number of jobs to run per GPU")
+@option("--sleep_itvl_mins", default=2, help="Sleep interval in minutes")
+@option("--max_queued_jobs", default=5, help="Max number of queued jobs")
+def run_scheduler(
+    config_file_path: str,
+    device_name: str,
+    max_jobs: int,
+    num_jobs_per_gpu: int = 2,
+    sleep_itvl_mins: int = 2,
+    max_queued_jobs: int = 5,
+):
+    if device_name == "lilibet":
+        run_scheduler_lilibet(config_file_path, device_name, max_jobs, num_jobs_per_gpu)
+    elif device_name == "hpc_cx3":
+        run_scheduler_hpc_cx3(
+            config_file_path,
+            device_name,
+            max_jobs,
+            num_jobs_per_gpu,
+            sleep_itvl_mins,
+            max_queued_jobs,
+        )
+
+
 def run_scheduler_lilibet(
     config_file_path: str,
     device_name: str,
@@ -504,5 +590,50 @@ def run_scheduler_lilibet(
         print(f"Finished running all jobs for job idx: {job_idx}")
 
 
+def run_scheduler_hpc_cx3(
+    config_file_path: str,
+    device_name: str,
+    max_jobs: int,
+    num_jobs_per_gpu: int = 2,
+    sleep_itvl_mins: int = 2,
+    max_queued_jobs: int = 5,
+):
+    # load the config file
+    with open(config_file_path, "r") as f:
+        config = json.load(f)
+
+    # Initialize the TaskScheduler
+    ts = TaskScheduler(config, device_name)
+
+    print("Starting Scheduler...")
+    for job_idx in range(1, max_jobs + 1):
+        # Get the number of jobs running and queued
+        running_jobs, queued_jobs = ts.return_cx3_queue_status()
+        print(f"Currently running jobs: {running_jobs}, queued jobs: {queued_jobs}")
+
+        if queued_jobs >= max_queued_jobs or (running_jobs + queued_jobs) >= 20:
+            print(f"Too many jobs queued, sleeping for {sleep_itvl_mins} mins...")
+            ts.sleep_and_update_db(sleep_itvl_mins)
+            continue
+
+        db_tasks = ts.get_tasks_by_filter(
+            {
+                "folding_status": STATUS_NOT_STARTED,
+                "msa_status": STATUS_COMPLETED,
+            }
+        )
+        if len(db_tasks) == 0:
+            if running_jobs == 0:
+                # Update db if all jobs are completed
+                ts.sleep_and_update_db(sleep_itvl_mins)
+            print("No tasks to run")
+            break
+
+        # Run the task (schedule jobs)
+        curr_jobs = db_tasks[:num_jobs_per_gpu]
+        print(f"{job_idx}. Running jobs: {[a['file_name'] for a in curr_jobs]}")
+        ts.run_job(curr_jobs)
+
+
 if __name__ == "__main__":
-    run_scheduler_lilibet()
+    run_scheduler()
