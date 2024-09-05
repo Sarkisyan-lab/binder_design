@@ -501,7 +501,6 @@ def run_scheduler_lilibet(
         curr_jobs = db_tasks[:num_jobs_per_gpu]
         print(f"{job_idx}. Running jobs: {[a['file_name'] for a in curr_jobs]}")
         ts.run_job(curr_jobs)
-        ts.update_db_with_completed_local_tasks()
         print(f"Finished running all jobs for job idx: {job_idx}")
 
 
