@@ -276,8 +276,7 @@ class TaskScheduler:
             f"#PBS -l walltime={self.config.hpc_clf_search_time}",
             f"#PBS -e {logs_dir}/",
             f"#PBS -o {logs_dir}/",
-            f"exec > >(tee -a {logs_dir}/"
-            + "$colabfold_search_batch_${PBS_JOBID}.out)",
+            f"exec > >(tee -a {logs_dir}/" + "colabfold_search_batch_${PBS_JOBID}.out)",
             "cd $PBS_O_WORKDIR",
             'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
             f"conda activate {self.config.hpc_colabfold_conda_env}",
