@@ -251,7 +251,7 @@ class TaskScheduler:
                 lines = f.readlines()
                 description = lines[0].strip().lstrip(">")
                 sequence = "".join(line.strip() for line in lines[1:])
-                fasta_data.append({"id": description, "seq": sequence})
+                fasta_data.append({"id": description, "sequence": sequence})
 
         df = pd.DataFrame(fasta_data)
         csv_output_path = os.path.join(fasta_dir, "fasta_contents.csv")
