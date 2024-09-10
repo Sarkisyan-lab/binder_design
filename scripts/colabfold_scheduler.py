@@ -16,6 +16,7 @@ STATUS_COMPLETED = "completed"
 DEVICE_LILIBET = "lilibet"
 DEVICE_HPC_CX3 = "hpc_cx3"
 DEVICE_HPC_BASE = "hpc_base"
+DEVICE_HPC_HX1 = "hpc_hx1"
 DEVICE_JEX = "jex"
 JOB_TYPE_MSA = "msa"
 JOB_TYPE_FOLDING = "folding"
@@ -101,6 +102,8 @@ class TaskScheduler:
                     base_output_dir = self.config.lilibet_output_dir
                 elif self.device == DEVICE_HPC_CX3 or self.device == DEVICE_HPC_BASE:
                     base_output_dir = self.config.hpc_output_dir
+                elif self.device == DEVICE_HPC_HX1:
+                    base_output_dir = self.config.hpc_hx1_output_dir
                 elif self.device == DEVICE_JEX:
                     base_output_dir = self.config.jex_output_dir
                 else:
@@ -302,6 +305,8 @@ class TaskScheduler:
     def job_housekeeping(self, job_details: dict, device: str):
         if device == DEVICE_HPC_CX3 or device == DEVICE_HPC_BASE:
             base_path = self.config.hpc_output_dir
+        elif device == DEVICE_HPC_HX1:
+            base_path = self.config.hpc_hx1_output_dir
         elif device == DEVICE_LILIBET:
             base_path = self.config.lilibet_output_dir
         elif device == DEVICE_JEX:
@@ -347,7 +352,7 @@ class TaskScheduler:
         self, job_details_list: list, copy_to_lilibet: bool = True
     ):
         print(
-            f"Running Folding for {len(job_details_list)} sequences on lilibet parallely"
+            f"Running Folding for {len(job_details_list)} sequences on {self.device} parallely"
         )
         fold_cmd = []
         scp_cmd = [] if copy_to_lilibet else None
@@ -397,6 +402,64 @@ class TaskScheduler:
         # submit_job
         try:
             subprocess.run(f"qsub {job_file_path}", shell=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Error submitting job on HPC: {e}")
+        return True
+
+    def submit_job_folding_hpc_hx1(
+        self, job_details_list: list, copy_to_lilibet: bool = True
+    ):
+        print(
+            f"Running Folding for {len(job_details_list)} sequences on {self.device} parallely"
+        )
+        fold_cmd = []
+        scp_cmd = [] if copy_to_lilibet else None
+        for job_details in job_details_list:
+            fasta_file_name = job_details["file_name"]
+            logs_dir, predictions_dir, msa_output_dir, fasta_file_full_path = (
+                self.job_housekeeping(job_details, device=DEVICE_HPC_HX1)
+            )
+            msa_file_path = os.path.join(msa_output_dir, f"{fasta_file_name}.a3m")
+            template_file_path = os.path.join(
+                msa_output_dir, f"{fasta_file_name}_pdb100_230517.m8"
+            )
+            drop_out_str = "--use-dropout" if self.config.colabfold_dropout else ""
+            fold_cmd.append(
+                f"colabfold_batch {msa_file_path} {predictions_dir} --num-recycle {self.config.colabfold_num_recycle} --num-models {self.config.colabfold_num_models} {drop_out_str}"
+            )
+            if copy_to_lilibet:
+                scp_cmd.append(
+                    f"scp -r -P 10002 {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/"
+                )
+        fold_cmd_str = " & ".join(fold_cmd)
+        scp_cmd_str = " & ".join(scp_cmd) if copy_to_lilibet else None
+
+        # Folding commands
+        commands = [
+            "#!/bin/bash",
+            f"#PBS -l select=1:ncpus={self.config.hpc_folding_job_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1:gpu_type=A100",
+            f"#PBS -l walltime={self.config.hpc_folding_job_time}",
+            f"#PBS -N {fasta_file_name}",
+            f"#PBS -e {logs_dir}/",
+            f"#PBS -o {logs_dir}/",
+            f"exec > >(tee -a {logs_dir}/" + "${PBS_JOBNAME}_${PBS_JOBID}_folding.out)",
+            "cd $PBS_O_WORKDIR",
+            'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
+            f"conda activate {self.config.hpc_hx1_colabfold_conda_env}",
+            fold_cmd_str,
+            "wait",
+        ]
+        if scp_cmd_str:
+            commands.append(scp_cmd_str)
+
+        job_file_path = os.path.join(logs_dir, f"{fasta_file_name}_folding.pbs")
+        with open(job_file_path, "w") as f:
+            for command in commands:
+                f.write(command + "\n")
+
+        # submit_job
+        try:
+            subprocess.run(f"qsub -q hx {job_file_path}", shell=True)
         except subprocess.CalledProcessError as e:
             raise Exception(f"Error submitting job on HPC: {e}")
         return True
@@ -451,7 +514,7 @@ class TaskScheduler:
         return True
 
     @staticmethod
-    def return_cx3_queue_status(queue_name="v1_gpu72"):
+    def return_hpc_queue_status(queue_name="v1_gpu72"):
         """
         Returns the number of running and queued jobs in the specified queue.
         """
@@ -495,6 +558,8 @@ class TaskScheduler:
             job_status = self.submit_job_folding_lilibet(job_details_list)
         elif self.device == DEVICE_HPC_CX3:
             job_status = self.submit_job_folding_hpc_cx3(job_details_list)
+        elif self.device == DEVICE_HPC_HX1:
+            job_status = self.submit_job_folding_hpc_hx1(job_details_list)
         else:
             raise ValueError(
                 f"Folding on other devices not implemented yet: {self.device}"
@@ -543,10 +608,10 @@ def run_scheduler(
     sleep_itvl_mins: int = 2,
     max_queued_jobs: int = 5,
 ):
-    if device_name == "lilibet":
+    if device_name == DEVICE_LILIBET:
         run_scheduler_lilibet(config_file_path, device_name, max_jobs, num_jobs_per_gpu)
-    elif device_name == "hpc_cx3":
-        run_scheduler_hpc_cx3(
+    elif device_name == DEVICE_HPC_CX3 or device_name == DEVICE_HPC_HX1:
+        run_scheduler_hpc(
             config_file_path,
             device_name,
             max_jobs,
@@ -589,7 +654,7 @@ def run_scheduler_lilibet(
         print(f"Finished running all jobs for job idx: {job_idx}")
 
 
-def run_scheduler_hpc_cx3(
+def run_scheduler_hpc(
     config_file_path: str,
     device_name: str,
     max_jobs: int,
@@ -607,7 +672,12 @@ def run_scheduler_hpc_cx3(
     print("Starting Scheduler...")
     for job_idx in range(1, max_jobs + 1):
         # Get the number of jobs running and queued
-        running_jobs, queued_jobs = ts.return_cx3_queue_status()
+        if device_name == DEVICE_HPC_CX3:
+            running_jobs, queued_jobs = ts.return_hpc_queue_status(
+                queue_name="v1_gpu72"
+            )
+        else:
+            running_jobs, queued_jobs = ts.return_hpc_queue_status(queue_name="v1_a100")
         print(f"Currently running jobs: {running_jobs}, queued jobs: {queued_jobs}")
 
         if queued_jobs >= max_queued_jobs or (running_jobs + queued_jobs) >= 20:
