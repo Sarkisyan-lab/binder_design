@@ -1,5 +1,10 @@
+# Environment variables
 .env
+
+# Test files
 test.*
+
+# Directories
 .ipynb_checkpoints/
 outputs/
 logs/
@@ -7,3 +12,7 @@ __pycache__/
 artifacts/
 wandb/
 src/
+
+# IDE-specific
+.vscode/
+*.code-workspace
