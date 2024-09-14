@@ -366,7 +366,7 @@ class TaskScheduler:
     def job_housekeeping(self, job_details: dict):
         """
         Perform housekeeping tasks for a job.
-        
+
         Args:
             job_details (dict): Job details.
         """
@@ -381,8 +381,12 @@ class TaskScheduler:
         msas_file_path = os.path.join(self.output_dir, "msas")
         predictions_dir = os.path.join(self.output_dir, "predictions", fasta_file_name)
 
-        assert utils.check_if_fasta_file_exists(fasta_file_path), f"Fasta file not found: {fasta_file_name}"
-        assert utils.check_if_msas_exist(msas_file_path, fasta_file_name), f"MSAs do not exist for {fasta_file_name}!"
+        assert utils.check_if_fasta_file_exists(
+            fasta_file_path
+        ), f"Fasta file not found: {fasta_file_name}"
+        assert utils.check_if_msas_exist(
+            msas_file_path, fasta_file_name
+        ), f"MSAs do not exist for {fasta_file_name}!"
 
         # Make predictions directory
         os.makedirs(predictions_dir, exist_ok=True)
@@ -418,7 +422,7 @@ class TaskScheduler:
     #     # Folding commands
     #     commands = [
     #         "#!/bin/bash",
-    #         f"#PBS -l select=1:ncpus={self.config.hpc_folding_job_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1",
+    #         f"#PBS -l select=1:ncpus={self.config.hpc_folding_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1",
     #         f"#PBS -l walltime={self.config.hpc_folding_job_time}",
     #         f"#PBS -N {fasta_file_name}",
     #         f"#PBS -e {logs_dir}/",
@@ -476,7 +480,7 @@ class TaskScheduler:
     #     # Folding commands
     #     commands = [
     #         "#!/bin/bash",
-    #         f"#PBS -l select=1:ncpus={self.config.hpc_folding_job_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1:gpu_type=A100",
+    #         f"#PBS -l select=1:ncpus={self.config.hpc_folding_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1:gpu_type=A100",
     #         f"#PBS -l walltime={self.config.hpc_folding_job_time}",
     #         f"#PBS -N {fasta_file_name}",
     #         f"#PBS -e {logs_dir}/",
@@ -535,7 +539,7 @@ class TaskScheduler:
     # def run_batch_jobs(self, job_details_list: list):
     #     """
     #     Run the folding jobs for the given list of jobs.
-        
+
     #     Args:
     #         job_details_list (list): List of job details to run.
     #     """
@@ -566,7 +570,7 @@ class TaskScheduler:
     # def submit_job_folding_lilibet_copy(self, job_details_list: list):
     #     """
     #     Run folding jobs on lilibet
-        
+
     #     Args:
     #         job_details_list (list): List of job details to run.
     #     """
@@ -577,13 +581,13 @@ class TaskScheduler:
     #     for job_details in job_details_list:
     #         # check if fasta, msas exist. create predictions dir.
     #         self.job_housekeeping(job_details)
-            
+
     #         # get all directories and paths
     #         fasta_file_name = job_details["file_name"]
     #         predictions_dir = os.path.join(self.output_dir, "predictions", fasta_file_name)
     #         msa_file_path = os.path.join(self.output_dir, "msas", f"{fasta_file_name}.a3m")
-            
-    #         # TODO: add support for templates 
+
+    #         # TODO: add support for templates
     #         template_file_path = os.path.join(
     #             self.output_dir, "msas", f"{fasta_file_name}_pdb100_230517.m8"
     #         )
@@ -620,7 +624,7 @@ class TaskScheduler:
             commands = [
                 f"source ~/anaconda3/etc/profile.d/conda.sh",
                 f"conda activate {conda_env}",
-                f"cd {colabfold_exec_path}"
+                f"cd {colabfold_exec_path}",
             ]
         elif self.device in [DEVICE_HPC_CX3, DEVICE_HPC_HX1]:
             if self.device == DEVICE_HPC_CX3:
@@ -629,12 +633,13 @@ class TaskScheduler:
                 conda_env = os.getenv("HPC_HX1_COLABFOLD_CONDA_ENV")
             commands = [
                 "#!/bin/bash",
-                f"#PBS -l select=1:ncpus={self.config.hpc_folding_job_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1",
-                f"#PBS -l walltime={self.config.hpc_folding_job_time}",
+                f"#PBS -l select=1:ncpus={self.args.hpc_folding_num_cpus}:mem={self.args.hpc_folding_mem_gb}gb:ngpus=1",
+                f"#PBS -l walltime={self.args.hpc_folding_time}",
                 f"#PBS -N job_{self.device}_{job_idx}",
                 f"#PBS -e {logs_dir}/",
                 f"#PBS -o {logs_dir}/",
-                f"exec > >(tee -a {logs_dir}/job_{job_idx}" + "_${PBS_JOBID}_folding.out)",
+                f"exec > >(tee -a {logs_dir}/job_{job_idx}"
+                + "_${PBS_JOBID}_folding.out)",
                 "cd $PBS_O_WORKDIR",
                 'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
                 f"conda activate {conda_env}",
@@ -646,7 +651,7 @@ class TaskScheduler:
     def submit_job_folding_common(self, job_details_list: list, job_index: int):
         """
         Run folding jobs on lilibet
-        
+
         Args:
             job_details_list (list): List of job details to run.
         """
@@ -664,13 +669,17 @@ class TaskScheduler:
 
             # check if fasta, msas exist. create predictions dir.
             self.job_housekeeping(job_details)
-            
+
             # get all directories and paths
             fasta_file_name = job_details["file_name"]
-            predictions_dir = os.path.join(self.output_dir, "predictions", fasta_file_name)
-            msa_file_path = os.path.join(self.output_dir, "msas", f"{fasta_file_name}.a3m")
-            
-            # TODO: add support for templates 
+            predictions_dir = os.path.join(
+                self.output_dir, "predictions", fasta_file_name
+            )
+            msa_file_path = os.path.join(
+                self.output_dir, "msas", f"{fasta_file_name}.a3m"
+            )
+
+            # TODO: add support for templates
             template_file_path = os.path.join(
                 self.output_dir, "msas", f"{fasta_file_name}_pdb100_230517.m8"
             )
@@ -702,18 +711,20 @@ class TaskScheduler:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            
+
         elif self.device in [DEVICE_HPC_CX3, DEVICE_HPC_HX1]:
             hx1_queue_str = "-q hx" if self.device == DEVICE_HPC_HX1 else ""
-            job_file_path = os.path.join(self.output_dir, f"logs/job_{self.device}_{job_index}_folding.pbs")
-            
+            job_file_path = os.path.join(
+                self.output_dir, f"logs/job_{self.device}_{job_index}_folding.pbs"
+            )
+
             # create pbs file
             with open(job_file_path, "w") as f:
                 for command in commands:
                     f.write(command + "\n")
-            
+
             subprocess.run(f"qsub {hx1_queue_str} {job_file_path}", shell=True)
-        
+
         else:
             raise ValueError(f"Invalid device: {self.device}")
 
@@ -726,7 +737,9 @@ def main(args):
     # Set up logging
     logger = logging.getLogger("scheduler_main")
     logging.basicConfig(level=logging.INFO)
-    logger.info(f"Running scheduler on: {device_name}. Num jobs per GPU: {args.num_jobs_per_gpu}")
+    logger.info(
+        f"Running scheduler on: {device_name}. Num jobs per GPU: {args.num_jobs_per_gpu}"
+    )
 
     if args.generate_msas:
         if device_name != DEVICE_HPC_CX3:
@@ -747,16 +760,21 @@ def main(args):
     ts = TaskScheduler(args)
 
     current_job_idx = 1
-    while current_job_idx <= args.max_jobs + 1:        
+    while current_job_idx < args.max_jobs + 1:
         # Only for HPC / JEX
         # TODO: Add support for JEX here.
         if device_name in [DEVICE_HPC_HX1, DEVICE_HPC_CX3]:
             queue_name = "v1_a100" if device_name == DEVICE_HPC_HX1 else "v1_gpu72"
             running_jobs, queued_jobs = ts.return_hpc_queue_status(queue_name)
-            
+
             # Don't run more and sleep
-            if queued_jobs >= args.max_queued_jobs or (running_jobs + queued_jobs) >= 20:
-                logger.info(f"Already {queued_jobs} jobs in queue; sleeping for {args.sleep_itvl_mins} mins.")
+            if (
+                queued_jobs >= args.max_queued_jobs
+                or (running_jobs + queued_jobs) >= 20
+            ):
+                logger.info(
+                    f"Already {queued_jobs} jobs in queue; sleeping for {args.sleep_itvl_mins} mins."
+                )
                 time.sleep(args.sleep_itvl_mins * 60)
                 continue
 
@@ -772,9 +790,9 @@ def main(args):
                 # Update db if all jobs are completed
                 logger.info("No more tasks to run! Finishing the scheduler.")
                 break
-        
+
         # Run the task
-        batch_jobs = db_tasks[:args.num_jobs_per_gpu]
+        batch_jobs = db_tasks[: args.num_jobs_per_gpu]
         ts.submit_job_folding_common(batch_jobs, current_job_idx)
         logger.info(f"Finished running all jobs for job idx: {current_job_idx}")
         current_job_idx += 1
