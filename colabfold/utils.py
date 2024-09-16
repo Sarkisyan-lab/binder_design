@@ -5,6 +5,13 @@ This file contains utility functions for the Colabfold project.
 import os
 import shutil
 from dotenv import load_dotenv
+import logging
+
+logger = logging.getLogger("utils")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s :: %(levelname)s :: %(message)s",
+)
 
 # load environment variables
 load_dotenv(os.path.abspath(os.path.join(__file__, "../../.env")))
@@ -151,4 +158,5 @@ def clean_predictions_folder(predictions_folder):
     for directory in directories:
         dir_path = os.path.join(predictions_folder, directory)
         if not check_if_predictions_complete(dir_path):
+            logger.info(f"Removing {dir_path} because the predictions are not complete")
             shutil.rmtree(dir_path)

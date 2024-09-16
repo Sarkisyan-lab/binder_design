@@ -86,7 +86,7 @@ def main(args: Namespace):
 
             scp_cmd = f"scp -r -P {lilibet_port} {args.predictions_dir} {lilibet_host}:{lilibet_output_dir}/predictions/"
             subprocess.run(["bash", "-c", scp_cmd])
-            logging.info(f"Copied predictions to lilibet: {file_name}")
+            logger.info(f"Copied predictions to lilibet: {file_name}")
 
     logger.info(f"Finished folding: {file_name}!")
 
