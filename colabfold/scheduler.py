@@ -69,7 +69,6 @@ class TaskScheduler:
             self.ref.child(key).set({})
         self.logger.info(f"Emptied the database containing {len(objs)} tasks.")
 
-
     def get_tasks_by_filter(self, filter_criteria: dict) -> list:
         """
         Gets tasks from the database based on the filter criteria
@@ -424,12 +423,13 @@ class TaskScheduler:
             raise ValueError(f"Invalid device: {self.device}")
         return commands
 
-    def submit_job_folding_common(self, job_details_list: list, job_index: int):
+    def submit_folding_jobs(self, job_details_list: list, job_index: int):
         """
         Run folding jobs on lilibet
 
         Args:
             job_details_list (list): List of job details to run.
+            job_index (int): Job index
         """
         folding_commands = []
         scp_cmds = []
@@ -569,13 +569,12 @@ def main(args):
 
         # Run the task
         batch_jobs = db_tasks[: args.num_jobs_per_gpu]
-        ts.submit_job_folding_common(batch_jobs, current_job_idx)
+        ts.submit_folding_jobs(batch_jobs, current_job_idx)
         logger.info(f"Finished running all jobs for job idx: {current_job_idx}")
         current_job_idx += 1
 
 
 if __name__ == "__main__":
-    # run_scheduler()
     argparse_bool = lambda x: (str(x).lower() == "true")
     parser = ArgumentParser(description="Arguments for the scheduler")
 
