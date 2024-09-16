@@ -69,31 +69,6 @@ class TaskScheduler:
             self.ref.child(key).set({})
         self.logger.info(f"Emptied the database containing {len(objs)} tasks.")
 
-    # def inflate_tasks_from_fasta_dir(
-    #     self, fasta_dir, set_default_msas_status=STATUS_COMPLETED
-    # ):
-    #     """
-    #     Inflates the database with tasks from a fasta directory
-
-    #     Args:
-    #         fasta_dir (str): Path to the fasta directory
-    #         set_default_msas_status (str): Status to set for the MSAs. Defaults to STATUS_COMPLETED.
-    #     """
-    #     for fasta_file in glob.glob(
-    #         os.path.join(self.output_dir, "input", "*.fasta")
-    #     ) + glob.glob(os.path.join(self.output_dir, "input", "*.fa")):
-    #         fasta_content = self.fasta_file_to_fasta_str(fasta_file)
-    #         self.logger.info(f"Adding task: {os.path.basename(fasta_file)}")
-    #         self.ref.push(
-    #             {
-    #                 "file_name": os.path.basename(fasta_file).split(".")[0],
-    #                 "seq": fasta_content,
-    #                 "msa_status": set_default_msas_status,
-    #                 "folding_status": STATUS_NOT_STARTED,
-    #                 "msa_device": STATUS_UNASSIGNED,
-    #                 "folding_device": STATUS_UNASSIGNED,
-    #             }
-    #         )
 
     def get_tasks_by_filter(self, filter_criteria: dict) -> list:
         """
@@ -278,12 +253,6 @@ class TaskScheduler:
             for command in commands:
                 f.write(command + "\n")
 
-        # submit_job
-        # try:
-        #     subprocess.run(f"qsub {job_file_path}", shell=True)
-        # except subprocess.CalledProcessError as e:
-        #     raise Exception(f"Error submitting job on HPC: {e}")
-
     def submit_job_msa_local_hpc_from_fasta_dir(
         self, fasta_dir: str, use_templates=True, copy_to_lilibet=True
     ):
@@ -391,122 +360,6 @@ class TaskScheduler:
         # Make predictions directory
         os.makedirs(predictions_dir, exist_ok=True)
 
-    # def submit_job_folding_hpc_cx3(
-    #     self, job_details_list: list, copy_to_lilibet: bool = True
-    # ):
-    #     print(
-    #         f"Running Folding for {len(job_details_list)} sequences on {self.device} parallely"
-    #     )
-    #     fold_cmd = []
-    #     scp_cmd = [] if copy_to_lilibet else None
-    #     for job_details in job_details_list:
-    #         fasta_file_name = job_details["file_name"]
-    #         logs_dir, predictions_dir, msa_output_dir, fasta_file_full_path = (
-    #             self.job_housekeeping(job_details, device=DEVICE_HPC_CX3)
-    #         )
-    #         msa_file_path = os.path.join(msa_output_dir, f"{fasta_file_name}.a3m")
-    #         template_file_path = os.path.join(
-    #             msa_output_dir, f"{fasta_file_name}_pdb100_230517.m8"
-    #         )
-    #         drop_out_str = "--use-dropout" if self.config.colabfold_dropout else ""
-    #         fold_cmd.append(
-    #             f"colabfold_batch {msa_file_path} {predictions_dir} --num-recycle {self.config.colabfold_num_recycle} --num-models {self.config.colabfold_num_models} {drop_out_str}"
-    #         )
-    #         if copy_to_lilibet:
-    #             scp_cmd.append(
-    #                 f"scp -r -P 10002 {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/"
-    #             )
-    #     fold_cmd_str = " & ".join(fold_cmd)
-    #     scp_cmd_str = " & ".join(scp_cmd) if copy_to_lilibet else None
-
-    #     # Folding commands
-    #     commands = [
-    #         "#!/bin/bash",
-    #         f"#PBS -l select=1:ncpus={self.config.hpc_folding_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1",
-    #         f"#PBS -l walltime={self.config.hpc_folding_job_time}",
-    #         f"#PBS -N {fasta_file_name}",
-    #         f"#PBS -e {logs_dir}/",
-    #         f"#PBS -o {logs_dir}/",
-    #         f"exec > >(tee -a {logs_dir}/" + "${PBS_JOBNAME}_${PBS_JOBID}_folding.out)",
-    #         "cd $PBS_O_WORKDIR",
-    #         'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
-    #         f"conda activate {self.config.hpc_colabfold_conda_env}",
-    #         fold_cmd_str,
-    #         "wait",
-    #     ]
-    #     if scp_cmd_str:
-    #         commands.append(scp_cmd_str)
-
-    #     job_file_path = os.path.join(logs_dir, f"{fasta_file_name}_folding.pbs")
-    #     with open(job_file_path, "w") as f:
-    #         for command in commands:
-    #             f.write(command + "\n")
-
-    #     # submit_job
-    #     try:
-    #         subprocess.run(f"qsub {job_file_path}", shell=True)
-    #     except subprocess.CalledProcessError as e:
-    #         raise Exception(f"Error submitting job on HPC: {e}")
-    #     return True
-
-    # def submit_job_folding_hpc_hx1(
-    #     self, job_details_list: list, copy_to_lilibet: bool = True
-    # ):
-    #     print(
-    #         f"Running Folding for {len(job_details_list)} sequences on {self.device} parallely"
-    #     )
-    #     fold_cmd = []
-    #     scp_cmd = [] if copy_to_lilibet else None
-    #     for job_details in job_details_list:
-    #         fasta_file_name = job_details["file_name"]
-    #         logs_dir, predictions_dir, msa_output_dir, fasta_file_full_path = (
-    #             self.job_housekeeping(job_details, device=DEVICE_HPC_HX1)
-    #         )
-    #         msa_file_path = os.path.join(msa_output_dir, f"{fasta_file_name}.a3m")
-    #         template_file_path = os.path.join(
-    #             msa_output_dir, f"{fasta_file_name}_pdb100_230517.m8"
-    #         )
-    #         drop_out_str = "--use-dropout" if self.config.colabfold_dropout else ""
-    #         fold_cmd.append(
-    #             f"colabfold_batch {msa_file_path} {predictions_dir} --num-recycle {self.config.colabfold_num_recycle} --num-models {self.config.colabfold_num_models} {drop_out_str}"
-    #         )
-    #         if copy_to_lilibet:
-    #             scp_cmd.append(
-    #                 f"scp -r -P 10002 {predictions_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}/predictions/"
-    #             )
-    #     fold_cmd_str = " & ".join(fold_cmd)
-    #     scp_cmd_str = " & ".join(scp_cmd) if copy_to_lilibet else None
-
-    #     # Folding commands
-    #     commands = [
-    #         "#!/bin/bash",
-    #         f"#PBS -l select=1:ncpus={self.config.hpc_folding_num_cpus}:mem={self.config.hpc_folding_job_mem_gb}gb:ngpus=1:gpu_type=A100",
-    #         f"#PBS -l walltime={self.config.hpc_folding_job_time}",
-    #         f"#PBS -N {fasta_file_name}",
-    #         f"#PBS -e {logs_dir}/",
-    #         f"#PBS -o {logs_dir}/",
-    #         f"exec > >(tee -a {logs_dir}/" + "${PBS_JOBNAME}_${PBS_JOBID}_folding.out)",
-    #         "cd $PBS_O_WORKDIR",
-    #         'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
-    #         f"conda activate {self.config.hpc_hx1_colabfold_conda_env}",
-    #         fold_cmd_str,
-    #         "wait",
-    #     ]
-    #     if scp_cmd_str:
-    #         commands.append(scp_cmd_str)
-
-    #     job_file_path = os.path.join(logs_dir, f"{fasta_file_name}_folding.pbs")
-    #     with open(job_file_path, "w") as f:
-    #         for command in commands:
-    #             f.write(command + "\n")
-
-    #     # submit_job
-    #     try:
-    #         subprocess.run(f"qsub -q hx {job_file_path}", shell=True)
-    #     except subprocess.CalledProcessError as e:
-    #         raise Exception(f"Error submitting job on HPC: {e}")
-    #     return True
-
     @staticmethod
     def return_hpc_queue_status(queue_name="v1_gpu72"):
         """
@@ -535,83 +388,6 @@ class TaskScheduler:
             1 for line in queued_jobs.splitlines() if line.strip() and line[0].isdigit()
         )
         return running_job_count, queued_job_count
-
-    # def run_batch_jobs(self, job_details_list: list):
-    #     """
-    #     Run the folding jobs for the given list of jobs.
-
-    #     Args:
-    #         job_details_list (list): List of job details to run.
-    #     """
-    #     # Set the job status to queued
-    #     for job_idx, job_details in enumerate(job_details_list):
-    #         file_name = job_details["file_name"]
-    #         job_id = self.find_db_id_for_file_name(file_name)
-    #         self.logger.info(f"Setting {file_name} to {STATUS_QUEUED}")
-    #         self.ref.child(job_id).child(f"folding_status").set(STATUS_QUEUED)
-    #         self.ref.child(job_id).child(f"folding_device").set(self.device)
-
-    #         # Add id to job details
-    #         job_details_list[job_idx]["job_id"] = job_id
-
-    #     # Submit the job
-    #     # TODO: Add support for JEX here.
-    #     if self.device == DEVICE_LILIBET:
-    #         self.submit_job_folding_lilibet(job_details_list)
-    #     elif self.device == DEVICE_HPC_CX3:
-    #         self.submit_job_folding_hpc_cx3(job_details_list)
-    #     elif self.device == DEVICE_HPC_HX1:
-    #         self.submit_job_folding_hpc_hx1(job_details_list)
-    #     else:
-    #         raise ValueError(
-    #             f"Folding on other devices not implemented yet: {self.device}"
-    #         )
-
-    # def submit_job_folding_lilibet_copy(self, job_details_list: list):
-    #     """
-    #     Run folding jobs on lilibet
-
-    #     Args:
-    #         job_details_list (list): List of job details to run.
-    #     """
-    #     print(
-    #         f"Running Folding for {len(job_details_list)} sequences on lilibet parallely"
-    #     )
-    #     folding_commands = []
-    #     for job_details in job_details_list:
-    #         # check if fasta, msas exist. create predictions dir.
-    #         self.job_housekeeping(job_details)
-
-    #         # get all directories and paths
-    #         fasta_file_name = job_details["file_name"]
-    #         predictions_dir = os.path.join(self.output_dir, "predictions", fasta_file_name)
-    #         msa_file_path = os.path.join(self.output_dir, "msas", f"{fasta_file_name}.a3m")
-
-    #         # TODO: add support for templates
-    #         template_file_path = os.path.join(
-    #             self.output_dir, "msas", f"{fasta_file_name}_pdb100_230517.m8"
-    #         )
-    #         folding_commands.append(
-    #             f"python wrapper.py --task_id={job_details['job_id']} --msa_file_path={msa_file_path} --predictions_dir={predictions_dir} --num-recycle={self.config.colabfold_num_recycle} --num-models={self.config.colabfold_num_models} --use-dropout={self.config.colabfold_dropout}"
-    #         )
-
-    #     folding_commands_str = " & ".join(folding_commands)
-
-    #     # define a common set of commands
-    #     colabfold_exec_path = os.path.abspath(os.path.dirname(__file__))
-    #     commands = [
-    #         f"source ~/anaconda3/etc/profile.d/conda.sh",
-    #         f"conda activate {self.config.lilibet_colabfold_conda_env}",
-    #         f"cd {colabfold_exec_path}",
-    #         folding_commands_str,
-    #     ]
-
-    #     # return commands
-    #     subprocess.run(
-    #         ["bash", "-c", "\n".join(commands)],
-    #         text=True,
-    #     )
-    #     return True
 
     def generate_initial_folding_commands(self, job_idx: int):
         """
