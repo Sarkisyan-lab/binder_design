@@ -6,7 +6,9 @@ import os
 import shutil
 from dotenv import load_dotenv
 import logging
-
+from Bio.PDB import PDBParser
+import numpy as np
+import glob
 logger = logging.getLogger("utils")
 logging.basicConfig(
     level=logging.INFO,
@@ -160,3 +162,110 @@ def clean_predictions_folder(predictions_folder):
         if not check_if_predictions_complete(dir_path):
             logger.info(f"Removing {dir_path} because the predictions are not complete")
             shutil.rmtree(dir_path)
+
+
+def get_residue_by_id(chain, res_seq):
+    for residue in chain:
+        if residue.get_id()[1] == res_seq:
+            return residue
+    raise Exception(f"Residue {res_seq} not found in chain {chain.id}")
+
+
+def check_if_chain_is_above_plane(
+    constr_plane_chain_id: str,
+    constr_plane_res_seq: list[int],
+    check_chain_id: str,
+    pdb_file_path: str,
+) -> tuple[int, int, int]:
+    """
+    Checks if the check chain is above the constructed plane
+
+    Args:
+        constr_plane_chain_id (str): Chain id of the chain used to construct the plane
+        constr_plane_res_seq (list[int]): The three residues used to construct the plane
+        check_chain_id (str): Chain id of the chain to check
+        pdb_file_path (str): Path to the pdb file
+    
+    Returns:
+        tuple[int, int, int]: Number of residues above, below, and on the plane
+    """
+    # Parse the PDB file
+    parser = PDBParser()
+    structure = parser.get_structure('protein', pdb_file_path)
+
+    # Plane chain ID
+    plane_chain_id = structure[0][constr_plane_chain_id]
+
+    # Get the coordinates of the CA atoms of the specified residues
+    coords = []
+
+    for res_num in constr_plane_res_seq:
+        residue = get_residue_by_id(plane_chain_id, res_num)
+        if 'CA' not in residue:
+            raise Exception(f"Residue {res_num} does not have a CA atom.")
+        ca_atom = residue['CA']
+        coords.append(ca_atom.get_coord())
+
+    coords = np.array(coords)
+
+    # Define the plane using the three points
+    v1 = coords[1] - coords[0]
+    v2 = coords[2] - coords[0]
+
+    # Normal vector to the plane
+    normal_vector = np.cross(v1, v2)
+    normal_vector = normal_vector / np.linalg.norm(normal_vector)
+
+    # Get chain to check
+    chain_to_check = structure[0][check_chain_id]
+
+    num_positive = 0
+    num_negative = 0
+    num_zero = 0
+
+    for residue in chain_to_check:
+        # Skip residues without a CA atom
+        if 'CA' not in residue:
+            continue
+        ca_atom = residue['CA']
+        coord = ca_atom.get_coord()
+        # Compute the signed distance from the plane
+        distance = np.dot(normal_vector, coord - coords[0])
+        if distance > 0:
+            num_positive += 1
+        elif distance < 0:
+            num_negative += 1
+        else:
+            num_zero += 1  # Residue lies exactly on the plane
+
+    return num_positive, num_negative, num_zero
+
+def check_chain_is_above_plane_for_dir(
+    constr_plane_chain_id: str,
+    constr_plane_res_seq: list[int],
+    check_chain_id: str,
+    pdb_dir_path: str,
+) -> list:
+    """
+    Checks if the check chain is above the constructed plane for a directory of PDB files
+    """
+    pdb_files = glob.glob(os.path.join(pdb_dir_path, "**", "*.pdb"), recursive=True)
+
+    results = []
+    for pdb_file in pdb_files:
+        try:
+            num_positive, num_negative, num_zero = check_if_chain_is_above_plane(
+                constr_plane_chain_id,
+                constr_plane_res_seq,
+                check_chain_id,
+                pdb_file
+            )
+            if num_positive > num_negative:
+                logger.info(f"PDB file {pdb_file} has more residues above the plane")
+                results.append(pdb_file)
+            else:
+                logger.info(f"PDB file {pdb_file} has {num_positive} residues above, {num_negative} residues below.")
+        except Exception as e:
+            logger.error(f"Error checking {pdb_file}: {e}")
+    
+    return results
