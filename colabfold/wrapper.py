@@ -15,7 +15,6 @@ load_dotenv(os.path.abspath(os.path.join(__file__, "../../.env")))
 import subprocess
 
 
-
 # constants
 STATUS_UNASSIGNED = "unassigned"
 STATUS_NOT_STARTED = "not_started"
