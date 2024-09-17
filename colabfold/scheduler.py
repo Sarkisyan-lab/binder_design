@@ -5,7 +5,6 @@ from firebase_admin import db
 import glob
 import pandas as pd
 from argparse import Namespace, ArgumentParser
-import json
 import time
 import logging
 from dotenv import load_dotenv
@@ -413,8 +412,7 @@ class TaskScheduler:
                 f"#PBS -N job_{self.device}_{job_idx}",
                 f"#PBS -e {logs_dir}/",
                 f"#PBS -o {logs_dir}/",
-                f"exec > >(tee -a {logs_dir}/job_{job_idx}"
-                + "_${PBS_JOBID}_folding.out)",
+                f"exec > >(tee -a {logs_dir}/job" + "_${PBS_JOBID}_folding.out)",
                 "cd $PBS_O_WORKDIR",
                 'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
                 f"conda activate {conda_env}",
@@ -491,7 +489,7 @@ class TaskScheduler:
         elif self.device in [DEVICE_HPC_CX3, DEVICE_HPC_HX1]:
             hx1_queue_str = "-q hx" if self.device == DEVICE_HPC_HX1 else ""
             job_file_path = os.path.join(
-                self.output_dir, f"logs/job_{self.device}_{job_index}_folding.pbs"
+                self.output_dir, f"logs/job_{file_name}_{job_index}_folding.pbs"
             )
 
             # create pbs file
@@ -546,7 +544,7 @@ def main(args):
             # Don't run more and sleep
             if (
                 queued_jobs >= args.max_queued_jobs
-                or (running_jobs + queued_jobs) >= 20
+                or (running_jobs + queued_jobs) >= 30
             ):
                 logger.info(
                     f"Already {queued_jobs} jobs in queue; sleeping for {args.sleep_itvl_mins} mins."
@@ -562,15 +560,13 @@ def main(args):
             }
         )
         if len(db_tasks) == 0:
-            if running_jobs == 0:
-                # Update db if all jobs are completed
-                logger.info("No more tasks to run! Finishing the scheduler.")
-                break
+            logger.info("No more tasks to run! Finishing the scheduler.")
+            break
 
         # Run the task
         batch_jobs = db_tasks[: args.num_jobs_per_gpu]
         ts.submit_folding_jobs(batch_jobs, current_job_idx)
-        logger.info(f"Finished running all jobs for job idx: {current_job_idx}")
+        logger.info("-" * 25 + "\n")
         current_job_idx += 1
 
 
