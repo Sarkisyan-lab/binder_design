@@ -149,7 +149,7 @@ class TaskScheduler:
             dict: Database id
         """
         if db_tasks is None:
-            db_tasks = self.ref.get("/")[0]
+            return None
         for db_task_key, db_task_value in db_tasks.items():
             if db_task_value["file_name"] == file_name:
                 return db_task_key
@@ -169,7 +169,7 @@ class TaskScheduler:
             resp_db_task_key = self.find_db_id_for_file_name(
                 local_task["file_name"], db_tasks
             )
-            db_task_value = db_tasks[resp_db_task_key]
+            db_task_value = db_tasks[resp_db_task_key] if db_tasks else None
             if db_task_value is None:
                 self.logger.info(
                     f"Task {local_task['file_name']} not found in db. Inserting."
@@ -289,8 +289,8 @@ class TaskScheduler:
         df.to_csv(csv_output_path, index=False)
 
         # mkdir logs and msas
-        logs_dir = os.path.join(self.config.hpc_output_dir, "logs", "msas")
-        msas_dir = os.path.join(self.config.hpc_output_dir, "msas")
+        logs_dir = os.path.join(self.output_dir, "logs", "msas")
+        msas_dir = os.path.join(self.output_dir, "msas")
         os.makedirs(logs_dir, exist_ok=True)
         os.makedirs(msas_dir, exist_ok=True)
 
@@ -301,22 +301,30 @@ class TaskScheduler:
             use_templates_idx = "0"
 
         # Run colabfold_search
+        conda_env = os.getenv("HPC_CX3_COLABFOLD_CONDA_ENV")
+        hpc_dbs_loc = os.getenv("HPC_DBS_LOC")
+
         commands = [
             "#!/bin/bash",
-            f"#PBS -l select=1:ncpus={self.config.hpc_clf_search_num_cpus}:mem={self.config.hpc_clf_search_mem_gb}gb",
-            f"#PBS -l walltime={self.config.hpc_clf_search_time}",
+            f"#PBS -l select=1:ncpus={self.args.hpc_msa_num_cpus}:mem={self.args.hpc_msa_mem_gb}gb",
+            f"#PBS -l walltime={self.args.hpc_msa_time}",
             f"#PBS -e {logs_dir}/",
             f"#PBS -o {logs_dir}/",
             f"exec > >(tee -a {logs_dir}/" + "colabfold_search_batch_${PBS_JOBID}.out)",
             "cd $PBS_O_WORKDIR",
             'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
-            f"conda activate {self.config.hpc_colabfold_conda_env}",
-            f"colabfold_search {csv_output_path} {self.config.hpc_dbs_loc} {msas_dir} --threads {self.config.hpc_clf_search_num_cpus-4} --use-templates {use_templates_idx} --db-load-mode 2 --use-env 1 --db2 pdb100_230517",
+            f"conda activate {conda_env}",
+            f"colabfold_search {csv_output_path} {hpc_dbs_loc} {msas_dir} --threads {self.args.hpc_msa_num_cpus-4} --use-templates {use_templates_idx} --db-load-mode 2 --use-env 1 --db2 pdb100_230517",
         ]
 
         if copy_to_lilibet:
+            lilibet_host = os.getenv("LILIBET_HOST")
+            lilibet_port = os.getenv("LILIBET_PORT")
+            assert (
+                self.args.lilibet_output_dir is not None
+            ), "Lilibet output directory is required."
             commands.append(
-                f"scp -P 10002 -r {msas_dir} {self.config.lilibet_host}:{self.config.lilibet_output_dir}"
+                f"scp -P {lilibet_port} -r {msas_dir} {lilibet_host}:{self.args.lilibet_output_dir}"
             )
 
         job_file_path = os.path.join(logs_dir, f"msa_search.pbs")
@@ -325,10 +333,10 @@ class TaskScheduler:
                 f.write(command + "\n")
 
         # submit_job
-        try:
-            subprocess.run(f"qsub {job_file_path}", shell=True)
-        except subprocess.CalledProcessError as e:
-            raise Exception(f"Error submitting job on HPC: {e}")
+        # try:
+        #     subprocess.run(f"qsub {job_file_path}", shell=True)
+        # except subprocess.CalledProcessError as e:
+        #     raise Exception(f"Error submitting job on HPC: {e}")
 
     def job_housekeeping(self, job_details: dict):
         """
@@ -515,12 +523,17 @@ def main(args):
         f"Running scheduler on: {device_name}. Num jobs per GPU: {args.num_jobs_per_gpu}"
     )
 
+    ts = TaskScheduler(args)
+
     if args.generate_msas:
         if device_name != DEVICE_HPC_CX3:
             raise ValueError(
                 f"Generating MSAs is only supported on HPC CX3, not {device_name}"
             )
-        pass
+        ts.submit_job_msa_local_hpc_from_fasta_dir(
+            os.path.join(args.output_dir, "input"),
+        )
+        return None
     elif args.clear_db_and_upload_msa_jobs:
         pass
     elif args.set_all_queued_jobs_to_not_started:
@@ -530,8 +543,6 @@ def main(args):
         assert (
             args.lilibet_output_dir is not None
         ), "Lilibet output directory is required."
-
-    ts = TaskScheduler(args)
 
     current_job_idx = 1
     while current_job_idx < args.max_jobs + 1:
