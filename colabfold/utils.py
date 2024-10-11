@@ -6,7 +6,7 @@ import os
 import shutil
 from dotenv import load_dotenv
 import logging
-from Bio.PDB import PDBParser
+from Bio.PDB import PDBParser, MMCIFParser
 import numpy as np
 import glob
 logger = logging.getLogger("utils")
@@ -190,7 +190,12 @@ def check_if_chain_is_above_plane(
         tuple[int, int, int]: Number of residues above, below, and on the plane
     """
     # Parse the PDB file
-    parser = PDBParser()
+    if pdb_file_path.endswith(".pdb"):
+        parser = PDBParser()
+        
+    elif pdb_file_path.endswith(".cif"):
+        parser = MMCIFParser()
+    
     structure = parser.get_structure('protein', pdb_file_path)
 
     # Plane chain ID
@@ -245,11 +250,12 @@ def check_chain_is_above_plane_for_dir(
     constr_plane_res_seq: list[int],
     check_chain_id: str,
     pdb_dir_path: str,
+    check_above_or_below: str = "above"
 ) -> list:
     """
     Checks if the check chain is above the constructed plane for a directory of PDB files
     """
-    pdb_files = glob.glob(os.path.join(pdb_dir_path, "**", "*.pdb"), recursive=True)
+    pdb_files = glob.glob(os.path.join(pdb_dir_path, "**", "*.pdb"), recursive=True) + glob.glob(os.path.join(pdb_dir_path, "**", "*.cif"), recursive=True)
 
     results = []
     for pdb_file in pdb_files:
@@ -260,8 +266,11 @@ def check_chain_is_above_plane_for_dir(
                 check_chain_id,
                 pdb_file
             )
-            if num_positive > num_negative:
+            if check_above_or_below == "above" and num_positive > num_negative:
                 logger.info(f"PDB file {pdb_file} has more residues above the plane")
+                results.append(pdb_file)
+            elif check_above_or_below == "below" and num_negative > num_positive:
+                logger.info(f"PDB file {pdb_file} has more residues below the plane")
                 results.append(pdb_file)
             else:
                 logger.info(f"PDB file {pdb_file} has {num_positive} residues above, {num_negative} residues below.")
