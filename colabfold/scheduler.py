@@ -68,7 +68,9 @@ class TaskScheduler:
             self.ref.child(key).set({})
         self.logger.info(f"Emptied the database containing {len(objs)} tasks.")
 
-    def get_tasks_by_filter(self, filter_criteria: dict) -> list:
+    def get_tasks_by_filter(
+        self, filter_criteria: dict, sort_by_seq_length: bool = True
+    ) -> list:
         """
         Gets tasks from the database based on the filter criteria
 
@@ -86,6 +88,8 @@ class TaskScheduler:
         self.logger.info(
             f"Found {len(filtered_tasks)} tasks matching the filter criteria"
         )
+        if sort_by_seq_length:
+            filtered_tasks = sorted(filtered_tasks, key=lambda x: len(x["seq"]))
         return filtered_tasks
 
     def get_local_tasks_status(self) -> list:
