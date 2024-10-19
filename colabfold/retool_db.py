@@ -30,7 +30,9 @@ class RetoolDB:
         self.jobs_table_name = jobs_table_name
         self.logger = logging.getLogger("retool_db")
         self.logger.setLevel(logging.INFO)
+        self.connect()
 
+    def connect(self):
         conn_params = {
             "dbname": os.getenv("RETOOL_DB_NAME"),
             "user": os.getenv("RETOOL_DB_USER"),
@@ -93,6 +95,13 @@ class RetoolDB:
 
     def execute_query(self, query: str):
         try:
+            if self.conn.closed:
+                self.logger.warning("Connection closed. Attempting to reconnect.")
+                self.connect()
+            self.cur.execute(query)
+        except psycopg2.OperationalError:
+            self.logger.warning("Connection error. Attempting to reconnect.")
+            self.connect()
             self.cur.execute(query)
         except Exception as e:
             self.cur.execute("ROLLBACK;")

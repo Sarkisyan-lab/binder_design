@@ -469,6 +469,8 @@ def main(args):
         logger.info("-" * 25 + "\n")
         current_job_idx += 1
 
+    ts.db.conn.close()
+
 
 if __name__ == "__main__":
     argparse_bool = lambda x: (str(x).lower() == "true")
