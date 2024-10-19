@@ -6,20 +6,20 @@ import firebase_admin
 from firebase_admin import db
 import shutil
 from dotenv import load_dotenv
+import subprocess
 
 sys.path.append(os.path.abspath(os.path.join(__file__, "../")))
 import utils
+from retool_db import (
+    RetoolDB,
+    STATUS_UNASSIGNED,
+    STATUS_NOT_STARTED,
+    STATUS_RUNNING,
+    STATUS_COMPLETED,
+)
 
 # load dotenv
 load_dotenv(os.path.abspath(os.path.join(__file__, "../../.env")))
-import subprocess
-
-
-# constants
-STATUS_UNASSIGNED = "unassigned"
-STATUS_NOT_STARTED = "not_started"
-STATUS_RUNNING = "running"
-STATUS_COMPLETED = "completed"
 
 
 def main(args: Namespace):
@@ -28,6 +28,7 @@ def main(args: Namespace):
 
     Args:
         args: Namespace
+            - task_id: str
             - msa_file_path: str
             - predictions_dir: str
             - use-dropout: bool
@@ -41,17 +42,16 @@ def main(args: Namespace):
         format="%(asctime)s :: %(levelname)s :: %(message)s",
     )
 
-    # initialize firebase
-    cred_obj = firebase_admin.credentials.Certificate(
-        os.path.abspath(os.path.join(__file__, "../src/login_key.json"))
-    )
-    firebase_admin.initialize_app(
-        cred_obj, {"databaseURL": os.environ["FIREBASE_DB_URL"]}
-    )
-    ref = db.reference("/")
+    # initialize RetoolDB
+    db = RetoolDB()
 
     # Set the task status to running
-    ref.child(args.task_id).child("folding_status").set(STATUS_RUNNING)
+    db.update_job_status(
+        {
+            "id": args.task_id,
+            "folding_status": STATUS_RUNNING,
+        }
+    )
 
     if args.use_dropout:
         use_dropout = "--use-dropout"
@@ -64,30 +64,31 @@ def main(args: Namespace):
     subprocess.run(["bash", "-c", colabfold_cmd])
 
     # check if predictions are complete
-    file_name = os.path.basename(args.msa_file_path)
     if not utils.check_if_predictions_complete(args.predictions_dir):
         logger.warning("PREDICTIONS FAILED!")
         logger.warning(f"Removing predictions directory: {args.predictions_dir}")
         shutil.rmtree(args.predictions_dir)
         logger.warning(
-            f"Setting folding status for {file_name} to {STATUS_NOT_STARTED}"
+            f"Setting folding status for {args.task_id} to {STATUS_NOT_STARTED}"
         )
-        ref.child(args.task_id).child("folding_status").set(STATUS_NOT_STARTED)
+        db.update_job_status(
+            {
+                "id": args.task_id,
+                "folding_status": STATUS_NOT_STARTED,
+                "folding_device": STATUS_UNASSIGNED,
+            }
+        )
 
     else:
-        logger.info(f"Setting folding status for {file_name} to {STATUS_COMPLETED}")
-        ref.child(args.task_id).child("folding_status").set(STATUS_COMPLETED)
+        logger.info(f"Setting folding status for {args.task_id} to {STATUS_COMPLETED}")
+        db.update_job_status(
+            {
+                "id": args.task_id,
+                "folding_status": STATUS_COMPLETED,
+            }
+        )
 
-        if args.lilibet_output_dir != "":
-            lilibet_host = os.environ["LILIBET_HOST"]
-            lilibet_port = os.environ["LILIBET_PORT"]
-            lilibet_output_dir = args.lilibet_output_dir
-
-            scp_cmd = f"scp -r -P {lilibet_port} {args.predictions_dir} {lilibet_host}:{lilibet_output_dir}/predictions/"
-            subprocess.run(["bash", "-c", scp_cmd])
-            logger.info(f"Copied predictions to lilibet: {file_name}")
-
-    logger.info(f"Finished folding: {file_name}!")
+    logger.info(f"Finished folding: {args.task_id}!")
 
 
 if __name__ == "__main__":

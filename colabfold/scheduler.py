@@ -1,7 +1,5 @@
 import os
 import subprocess
-import firebase_admin
-from firebase_admin import db
 import glob
 import pandas as pd
 from argparse import Namespace, ArgumentParser
@@ -13,20 +11,19 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(__file__, "../")))
 import utils
+from retool_db import (
+    RetoolDB,
+    STATUS_UNASSIGNED,
+    STATUS_NOT_STARTED,
+    STATUS_COMPLETED,
+    STATUS_QUEUED,
+    DEVICE_LILIBET,
+    DEVICE_HPC_CX3,
+    DEVICE_HPC_HX1,
+    DEVICE_JEX,
+    JOB_TYPE_FOLDING,
+)
 
-# constants
-STATUS_UNASSIGNED = "unassigned"
-STATUS_QUEUED = "queued"
-STATUS_RUNNING = "running"
-STATUS_NOT_STARTED = "not_started"
-STATUS_COMPLETED = "completed"
-DEVICE_LILIBET = "lilibet"
-DEVICE_HPC_CX3 = "hpc_cx3"
-DEVICE_HPC_BASE = "hpc_base"
-DEVICE_HPC_HX1 = "hpc_hx1"
-DEVICE_JEX = "jex"
-JOB_TYPE_MSA = "msa"
-JOB_TYPE_FOLDING = "folding"
 
 # load dotenv
 load_dotenv(os.path.abspath(os.path.join(__file__, "../../.env")))
@@ -47,50 +44,11 @@ class TaskScheduler:
         if self.args is None:
             self.logger.warning("No arguments provided.")
 
-        cred_obj = firebase_admin.credentials.Certificate(
-            os.path.abspath(os.path.join(__file__, "../src/login_key.json"))
-        )
-        self.default_app = firebase_admin.initialize_app(
-            cred_obj, {"databaseURL": os.environ["FIREBASE_DB_URL"]}
-        )
-        self.ref = db.reference("/")
+        self.db = RetoolDB()
 
         # Args into self vars
         self.device = utils.obtain_device_name()
         self.output_dir = args.output_dir
-
-    def empty_db(self):
-        """
-        Empties the entire database
-        """
-        objs = self.ref.get()
-        for key, _ in objs.items():
-            self.ref.child(key).set({})
-        self.logger.info(f"Emptied the database containing {len(objs)} tasks.")
-
-    def get_tasks_by_filter(
-        self, filter_criteria: dict, sort_by_seq_length: bool = True
-    ) -> list:
-        """
-        Gets tasks from the database based on the filter criteria
-
-        Args:
-            filter_criteria (dict): Filter criteria
-
-        Returns:
-            list: List of tasks
-        """
-        objs = self.ref.get()
-        filtered_tasks = []
-        for key, value in objs.items():
-            if all(value[k] == v for k, v in filter_criteria.items()):
-                filtered_tasks.append(value)
-        self.logger.info(
-            f"Found {len(filtered_tasks)} tasks matching the filter criteria"
-        )
-        if sort_by_seq_length:
-            filtered_tasks = sorted(filtered_tasks, key=lambda x: len(x["seq"]))
-        return filtered_tasks
 
     def get_local_tasks_status(self) -> list:
         """
@@ -103,99 +61,33 @@ class TaskScheduler:
         msas_dir = os.path.join(self.output_dir, "msas")
         fasta_dir = os.path.join(self.output_dir, "input")
 
-        if not os.path.exists(msas_dir):
-            msas_folder_contents = []
-        else:
-            msas_folder_contents = os.listdir(msas_dir)
-
         for fasta_file in glob.glob(os.path.join(fasta_dir, "*.fasta")) + glob.glob(
             os.path.join(fasta_dir, "*.fa")
         ):
 
             file_name = os.path.basename(fasta_file).split(".")[0]
             task_status = {
-                "file_name": file_name,
-                "seq": utils.fasta_file_to_fasta_str(fasta_file),
+                "id": file_name,
                 "msa_status": STATUS_NOT_STARTED,
-                "folding_status": STATUS_NOT_STARTED,
                 "msa_device": STATUS_UNASSIGNED,
+                "folding_status": STATUS_NOT_STARTED,
                 "folding_device": STATUS_UNASSIGNED,
+                "seq_len": len(utils.fasta_file_to_fasta_str(fasta_file)),
             }
             predictions_dir = os.path.join(self.output_dir, "predictions", file_name)
             # Check if MSAs exist
-            for file in msas_folder_contents:
-                if file_name in file and file.endswith(".a3m"):
-                    task_status["msa_status"] = STATUS_COMPLETED
-                    task_status["msa_device"] = self.device
-                    break
+            if utils.check_if_msas_exist(msas_dir, file_name):
+                task_status["msa_status"] = STATUS_COMPLETED
+                task_status["msa_device"] = self.device
 
             # Check if predictions exist
             if os.path.exists(predictions_dir):
-                predictions_folder_contents = os.listdir(predictions_dir)
-                for file in predictions_folder_contents:
-                    if "rank_001_alphafold2_multimer_v3" in file:
-                        task_status["folding_status"] = STATUS_COMPLETED
-                        task_status["folding_device"] = self.device
-                        break
+                if utils.check_if_predictions_complete(predictions_dir):
+                    task_status["folding_status"] = STATUS_COMPLETED
+                    task_status["folding_device"] = self.device
 
             local_task_status.append(task_status)
         return local_task_status
-
-    def find_db_id_for_file_name(self, file_name: str, db_tasks: dict = None) -> dict:
-        """
-        Find the database id for a given file name
-
-        Args:
-            file_name (str): File name
-            db_tasks (dict): Database tasks. If None, will fetch from the database.
-
-        Returns:
-            dict: Database id
-        """
-        if db_tasks is None:
-            return None
-        for db_task_key, db_task_value in db_tasks.items():
-            if db_task_value["file_name"] == file_name:
-                return db_task_key
-        return None
-
-    def overwrite_db_with_local_tasks(self, local_tasks_status: list):
-        """
-        Update the database with the local tasks
-
-        Args:
-            local_tasks_status (list): List of tasks with their status
-        """
-
-        db_tasks = self.ref.get()
-        for local_task in local_tasks_status:
-            # Find the task in the db for a given file name
-            resp_db_task_key = self.find_db_id_for_file_name(
-                local_task["file_name"], db_tasks
-            )
-            db_task_value = db_tasks[resp_db_task_key] if db_tasks else None
-            if db_task_value is None:
-                self.logger.info(
-                    f"Task {local_task['file_name']} not found in db. Inserting."
-                )
-                self.ref.push(local_task)
-                continue
-
-            for job_type in ["msa", "folding"]:
-                if (
-                    local_task[f"{job_type}_status"]
-                    != db_task_value[f"{job_type}_status"]
-                ):
-                    self.logger.info(
-                        f"Updating {job_type} status for {local_task['file_name']} from {db_task_value[f'{job_type}_status']} to {local_task[f'{job_type}_status']}"
-                    )
-                    # Update the db with the completed task
-                    self.ref.child(resp_db_task_key).child(f"{job_type}_status").set(
-                        local_task[f"{job_type}_status"]
-                    )
-                    self.ref.child(resp_db_task_key).child(f"{job_type}_device").set(
-                        self.device
-                    )
 
     def submit_job_msa_local_hpc_cx3_local(self, job_details: dict):
         """
@@ -204,7 +96,7 @@ class TaskScheduler:
         Args:
             job_details (dict): Job details
         """
-        fasta_file_name = job_details["file_name"]
+        fasta_file_name = job_details["id"]
         # Create directories locally
         os.makedirs(
             os.path.join(self.config.hpc_output_dir, fasta_file_name, "input"),
@@ -217,17 +109,6 @@ class TaskScheduler:
         os.makedirs(
             os.path.join(self.config.hpc_output_dir, fasta_file_name, "logs"),
             exist_ok=True,
-        )
-
-        # Save the fasta file locally
-        self.save_fasta_from_fasta_str(
-            fasta_str=job_details["seq"],
-            file_name=os.path.join(
-                self.config.hpc_output_dir,
-                fasta_file_name,
-                "input",
-                f"{fasta_file_name}.fasta",
-            ),
         )
 
         commands = [
@@ -349,7 +230,7 @@ class TaskScheduler:
         Args:
             job_details (dict): Job details.
         """
-        fasta_file_name = job_details["file_name"]
+        fasta_file_name = job_details["id"]
 
         # Check if fasta exists locally
         fasta_file_path = os.path.join(
@@ -444,20 +325,23 @@ class TaskScheduler:
         folding_commands = []
         scp_cmds = []
 
-        db_jobs = self.ref.get()
         for job_details in job_details_list:
             # Set the job status to queued
-            file_name = job_details["file_name"]
-            job_id = self.find_db_id_for_file_name(file_name, db_jobs)
+            file_name = job_details["id"]
             self.logger.info(f"Setting {file_name} to {STATUS_QUEUED}")
-            self.ref.child(job_id).child(f"folding_status").set(STATUS_QUEUED)
-            self.ref.child(job_id).child(f"folding_device").set(self.device)
+            self.db.update_job_status(
+                {
+                    "id": file_name,
+                    "folding_status": STATUS_QUEUED,
+                    "folding_device": self.device,
+                }
+            )
 
             # check if fasta, msas exist. create predictions dir.
             self.job_housekeeping(job_details)
 
             # get all directories and paths
-            fasta_file_name = job_details["file_name"]
+            fasta_file_name = job_details["id"]
             predictions_dir = os.path.join(
                 self.output_dir, "predictions", fasta_file_name
             )
@@ -470,7 +354,7 @@ class TaskScheduler:
                 self.output_dir, "msas", f"{fasta_file_name}_pdb100_230517.m8"
             )
             folding_commands.append(
-                f"python wrapper.py --task_id={job_id} --msa_file_path={msa_file_path} --predictions_dir={predictions_dir} --num-recycle={self.args.colabfold_num_recycle} --num-models={self.args.colabfold_num_models} --use-dropout={self.args.colabfold_dropout}"
+                f"python wrapper.py --task_id={fasta_file_name} --msa_file_path={msa_file_path} --predictions_dir={predictions_dir} --num-recycle={self.args.colabfold_num_recycle} --num-models={self.args.colabfold_num_models} --use-dropout={self.args.colabfold_dropout}"
             )
 
             if self.args.copy_to_lilibet:
@@ -491,7 +375,7 @@ class TaskScheduler:
             commands.append(scp_cmds_str)
 
         if self.device == DEVICE_LILIBET:
-            result = subprocess.run(
+            _ = subprocess.run(
                 ["bash", "-c", "\n".join(commands)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -568,19 +452,20 @@ def main(args):
                 continue
 
         # Obtain new tasks to run
-        db_tasks = ts.get_tasks_by_filter(
-            {
+        db_tasks = ts.db.fetch_jobs(
+            filter={
                 "folding_status": STATUS_NOT_STARTED,
                 "msa_status": STATUS_COMPLETED,
-            }
+            },
+            limit_items=args.num_jobs_per_gpu,
+            order_by_seq_len="asc",
         )
         if len(db_tasks) == 0:
             logger.info("No more tasks to run! Finishing the scheduler.")
             break
 
         # Run the task
-        batch_jobs = db_tasks[: args.num_jobs_per_gpu]
-        ts.submit_folding_jobs(batch_jobs, current_job_idx)
+        ts.submit_folding_jobs(db_tasks, current_job_idx)
         logger.info("-" * 25 + "\n")
         current_job_idx += 1
 
