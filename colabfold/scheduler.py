@@ -280,14 +280,70 @@ class TaskScheduler:
         )
         return running_job_count, queued_job_count
 
+    def return_queue_status(self):
+        """
+        Returns the number of running and queued jobs in the specified queue.
+        """
+        if self.device == DEVICE_HPC_CX3:
+            queue_name = "v1_gpu72"
+        elif self.device == DEVICE_HPC_HX1:
+            queue_name = "v1_a100"
+        elif self.device == DEVICE_JEX:
+            queue_name = "gpu"
+
+        if self.device in [DEVICE_HPC_CX3, DEVICE_HPC_HX1]:
+            host_name = os.getenv("HPC_HOST_NAME")
+            running_jobs = subprocess.run(
+                ["qstat", "-r", "-u", host_name, queue_name],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+
+            queued_jobs = subprocess.run(
+                ["qstat", "-i", "-u", host_name, queue_name],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            running_job_count = sum(
+                1 for line in running_jobs.splitlines() if line.strip()[0].isdigit()
+            )
+
+            queued_job_count = sum(
+                1 for line in queued_jobs.splitlines() if line.strip()[0].isdigit()
+            )
+
+        elif self.device == DEVICE_JEX:
+            host_name = os.getenv("JEX_HOST_NAME")
+            all_jobs = subprocess.run(
+                ["squeue", "-u", host_name, "-p", queue_name],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+
+            running_job_count = sum(
+                1
+                for line in all_jobs.splitlines()
+                if " R " in line.strip() and line.strip()[0].isdigit()
+            )
+            queued_job_count = sum(
+                1
+                for line in all_jobs.splitlines()
+                if " PD " in line.strip() and line.strip()[0].isdigit()
+            )
+
+        return running_job_count, queued_job_count
+
     def generate_initial_folding_commands(self, job_idx: int):
         """
         Generate the folding commands for the given job details list.
         """
         logs_dir = os.path.join(self.output_dir, "logs")
+        colabfold_exec_path = os.path.abspath(os.path.dirname(__file__))
         if self.device == DEVICE_LILIBET:
             conda_env = os.getenv("LILIBET_COLABFOLD_CONDA_ENV")
-            colabfold_exec_path = os.path.abspath(os.path.dirname(__file__))
             commands = [
                 f"source ~/anaconda3/etc/profile.d/conda.sh",
                 f"conda activate {conda_env}",
@@ -309,6 +365,23 @@ class TaskScheduler:
                 "cd $PBS_O_WORKDIR",
                 'eval "$(~/miniconda3/bin/conda shell.bash hook)"',
                 f"conda activate {conda_env}",
+            ]
+        elif self.device == DEVICE_JEX:
+            conda_env = os.getenv("JEX_COLABFOLD_CONDA_ENV")
+            commands = [
+                "#!/bin/bash",
+                f"#SBATCH --job-name=job_{self.device}_{job_idx}",
+                f"#SBATCH --output={logs_dir}/%j.out",
+                f"#SBATCH --error={logs_dir}/%j.err",
+                "#SBATCH --nodes=1",
+                f"#SBATCH --cpus-per-task={self.args.jex_folding_num_cpus}",
+                f"#SBATCH --mem={self.args.jex_folding_mem_gb}G",
+                f"#SBATCH --time={self.args.jex_folding_time}",
+                "#SBATCH --gres=gpu:1",
+                "#SBATCH --partition=gpu",
+                "module load miniconda3",
+                f"conda activate {conda_env}",
+                f"cd {colabfold_exec_path}",
             ]
         else:
             raise ValueError(f"Invalid device: {self.device}")
@@ -395,6 +468,17 @@ class TaskScheduler:
 
             subprocess.run(f"qsub {hx1_queue_str} {job_file_path}", shell=True)
 
+        elif self.device == DEVICE_JEX:
+            job_file_path = os.path.join(
+                self.output_dir, f"logs/job_{file_name}_{job_index}_folding.sh"
+            )
+
+            # Create a .sh file rather than a .pbs file
+            with open(job_file_path, "w") as f:
+                for command in commands:
+                    f.write(command + "\n")
+            subprocess.run(f"sbatch {job_file_path}", shell=True)
+
         else:
             raise ValueError(f"Invalid device: {self.device}")
 
@@ -435,10 +519,8 @@ def main(args):
     current_job_idx = 1
     while current_job_idx < args.max_jobs + 1:
         # Only for HPC / JEX
-        # TODO: Add support for JEX here.
-        if device_name in [DEVICE_HPC_HX1, DEVICE_HPC_CX3]:
-            queue_name = "v1_a100" if device_name == DEVICE_HPC_HX1 else "v1_gpu72"
-            running_jobs, queued_jobs = ts.return_hpc_queue_status(queue_name)
+        if device_name in [DEVICE_HPC_HX1, DEVICE_HPC_CX3, DEVICE_JEX]:
+            running_jobs, queued_jobs = ts.return_queue_status()
 
             # Don't run more and sleep
             if (
@@ -468,6 +550,10 @@ def main(args):
         ts.submit_folding_jobs(db_tasks, current_job_idx)
         logger.info("-" * 25 + "\n")
         current_job_idx += 1
+
+        if device_name == DEVICE_JEX:
+            # sleep for 10 seconds to avoid overloading the queue
+            time.sleep(10)
 
     ts.db.conn.close()
 
@@ -547,6 +633,24 @@ if __name__ == "__main__":
         type=int,
         default=64,
         help="Memory in GB to use for Colabfold folding on HPC CX3/HX1",
+    )
+    parser.add_argument(
+        "--jex_folding_time",
+        type=str,
+        default="01:30:00",
+        help="Time limit for Colabfold folding on JEX",
+    )
+    parser.add_argument(
+        "--jex_folding_num_cpus",
+        type=int,
+        default=8,
+        help="Number of CPUs to use for Colabfold folding on JEX",
+    )
+    parser.add_argument(
+        "--jex_folding_mem_gb",
+        type=int,
+        default=64,
+        help="Memory in GB to use for Colabfold folding on JEX",
     )
     parser.add_argument(
         "--colabfold_num_recycle",
