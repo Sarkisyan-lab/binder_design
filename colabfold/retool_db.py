@@ -17,9 +17,8 @@ STATUS_RUNNING = "running"
 STATUS_NOT_STARTED = "not_started"
 STATUS_COMPLETED = "completed"
 DEVICE_LILIBET = "lilibet"
-DEVICE_HPC_CX3 = "hpc_cx3"
-DEVICE_HPC_BASE = "hpc_base"
-DEVICE_HPC_HX1 = "hpc_hx1"
+DEVICE_HPC_CX3 = "cx3"
+DEVICE_HPC_HX1 = "hx1"
 DEVICE_JEX = "jex"
 JOB_TYPE_MSA = "msa"
 JOB_TYPE_FOLDING = "folding"
@@ -173,4 +172,37 @@ class RetoolDB:
         self.execute_query(
             "UPDATE af2_jobs SET folding_status = 'not_started', folding_device = 'unassigned' WHERE folding_status = 'queued';"
         )
+        self.conn.commit()
+
+    def update_jobs(self, jobs: list[dict]):
+        assert len(jobs) > 0, "No jobs to update"
+
+        for job in jobs:
+            assert "id" in job, "Each job must have an 'id' field"
+            job_id = job.pop("id")
+
+            if not job:
+                self.logger.warning(f"No fields to update for job {job_id}. Skipping.")
+                continue
+
+            set_clauses = []
+            values = []
+            for key, value in job.items():
+                assert key in ORDERED_TABLE_COLUMNS, f"Invalid field: {key}"
+                set_clauses.append(f"{key} = %s")
+                values.append(value)
+
+            set_clause = ", ".join(set_clauses)
+            values.append(job_id)
+
+            update_query = (
+                f"UPDATE {self.jobs_table_name} SET {set_clause} WHERE id = %s"
+            )
+
+            try:
+                self.cur.execute(update_query, tuple(values))
+            except Exception as e:
+                self.cur.execute("ROLLBACK;")
+                self.logger.error(f"Error updating job {job_id}: {str(e)}")
+
         self.conn.commit()

@@ -9,11 +9,17 @@ import logging
 from Bio.PDB import PDBParser, MMCIFParser
 import numpy as np
 import glob
+
 logger = logging.getLogger("utils")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s :: %(levelname)s :: %(message)s",
 )
+
+DEVICE_LILIBET = "lilibet"
+DEVICE_HPC_CX3 = "cx3"
+DEVICE_HPC_HX1 = "hx1"
+DEVICE_JEX = "jex"
 
 # load environment variables
 load_dotenv(os.path.abspath(os.path.join(__file__, "../../.env")))
@@ -67,15 +73,16 @@ def obtain_device_name() -> str:
     hpc_hx1_path_head = os.getenv("HPC_HX1_COLABFOLD_CONDA_ENV").split("/")[1:3]
 
     if file_path_head == jex_path_head:
-        return "jex"
+        return DEVICE_JEX
     elif file_path_head == lilibet_path_head:
-        return "lilibet"
+        return DEVICE_LILIBET
     elif file_path_head == hpc_cx3_path_head:
-        return "hpc_cx3"
+        return DEVICE_HPC_CX3
     elif file_path_head == hpc_hx1_path_head:
-        return "hpc_hx1"
+        return DEVICE_HPC_HX1
     else:
         raise ValueError("Device not found")
+
 
 def obtain_colabfold_conda_env_path(device: str = None) -> str:
     """
@@ -86,17 +93,18 @@ def obtain_colabfold_conda_env_path(device: str = None) -> str:
     """
     if not device:
         device = obtain_device_name()
-    
-    if device == "jex":
+
+    if device == DEVICE_JEX:
         return os.getenv("JEX_COLABFOLD_CONDA_ENV")
-    elif device == "lilibet":
+    elif device == DEVICE_LILIBET:
         return os.getenv("LILIBET_COLABFOLD_CONDA_ENV")
-    elif device == "hpc_cx3":
+    elif device == DEVICE_HPC_CX3:
         return os.getenv("HPC_CX3_COLABFOLD_CONDA_ENV")
-    elif device == "hpc_hx1":
+    elif device == DEVICE_HPC_HX1:
         return os.getenv("HPC_HX1_COLABFOLD_CONDA_ENV")
     else:
         raise ValueError("Device not found")
+
 
 def check_if_predictions_complete(predictions_folder: str) -> bool:
     """
@@ -113,6 +121,7 @@ def check_if_predictions_complete(predictions_folder: str) -> bool:
     done_files = [f for f in os.listdir(predictions_folder) if f.endswith(".done.txt")]
     return len(done_files) > 0
 
+
 def check_if_fasta_file_exists(fasta_file_path: str) -> bool:
     """
     Checks if the fasta file exists
@@ -124,6 +133,7 @@ def check_if_fasta_file_exists(fasta_file_path: str) -> bool:
         bool: True if the fasta file exists, False otherwise
     """
     return os.path.exists(fasta_file_path)
+
 
 def check_if_msas_exist(msa_folder_path: str, file_name: str) -> bool:
     """
@@ -185,18 +195,18 @@ def check_if_chain_is_above_plane(
         constr_plane_res_seq (list[int]): The three residues used to construct the plane
         check_chain_id (str): Chain id of the chain to check
         pdb_file_path (str): Path to the pdb file
-    
+
     Returns:
         tuple[int, int, int]: Number of residues above, below, and on the plane
     """
     # Parse the PDB file
     if pdb_file_path.endswith(".pdb"):
         parser = PDBParser()
-        
+
     elif pdb_file_path.endswith(".cif"):
         parser = MMCIFParser()
-    
-    structure = parser.get_structure('protein', pdb_file_path)
+
+    structure = parser.get_structure("protein", pdb_file_path)
 
     # Plane chain ID
     plane_chain_id = structure[0][constr_plane_chain_id]
@@ -206,9 +216,9 @@ def check_if_chain_is_above_plane(
 
     for res_num in constr_plane_res_seq:
         residue = get_residue_by_id(plane_chain_id, res_num)
-        if 'CA' not in residue:
+        if "CA" not in residue:
             raise Exception(f"Residue {res_num} does not have a CA atom.")
-        ca_atom = residue['CA']
+        ca_atom = residue["CA"]
         coords.append(ca_atom.get_coord())
 
     coords = np.array(coords)
@@ -230,9 +240,9 @@ def check_if_chain_is_above_plane(
 
     for residue in chain_to_check:
         # Skip residues without a CA atom
-        if 'CA' not in residue:
+        if "CA" not in residue:
             continue
-        ca_atom = residue['CA']
+        ca_atom = residue["CA"]
         coord = ca_atom.get_coord()
         # Compute the signed distance from the plane
         distance = np.dot(normal_vector, coord - coords[0])
@@ -245,26 +255,26 @@ def check_if_chain_is_above_plane(
 
     return num_positive, num_negative, num_zero
 
+
 def check_chain_is_above_plane_for_dir(
     constr_plane_chain_id: str,
     constr_plane_res_seq: list[int],
     check_chain_id: str,
     pdb_dir_path: str,
-    check_above_or_below: str = "above"
+    check_above_or_below: str = "above",
 ) -> list:
     """
     Checks if the check chain is above the constructed plane for a directory of PDB files
     """
-    pdb_files = glob.glob(os.path.join(pdb_dir_path, "**", "*.pdb"), recursive=True) + glob.glob(os.path.join(pdb_dir_path, "**", "*.cif"), recursive=True)
+    pdb_files = glob.glob(
+        os.path.join(pdb_dir_path, "**", "*.pdb"), recursive=True
+    ) + glob.glob(os.path.join(pdb_dir_path, "**", "*.cif"), recursive=True)
 
     results = []
     for pdb_file in pdb_files:
         try:
             num_positive, num_negative, num_zero = check_if_chain_is_above_plane(
-                constr_plane_chain_id,
-                constr_plane_res_seq,
-                check_chain_id,
-                pdb_file
+                constr_plane_chain_id, constr_plane_res_seq, check_chain_id, pdb_file
             )
             if check_above_or_below == "above" and num_positive > num_negative:
                 logger.info(f"PDB file {pdb_file} has more residues above the plane")
@@ -273,8 +283,10 @@ def check_chain_is_above_plane_for_dir(
                 logger.info(f"PDB file {pdb_file} has more residues below the plane")
                 results.append(pdb_file)
             else:
-                logger.info(f"PDB file {pdb_file} has {num_positive} residues above, {num_negative} residues below.")
+                logger.info(
+                    f"PDB file {pdb_file} has {num_positive} residues above, {num_negative} residues below."
+                )
         except Exception as e:
             logger.error(f"Error checking {pdb_file}: {e}")
-    
+
     return results
