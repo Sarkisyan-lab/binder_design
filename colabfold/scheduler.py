@@ -307,11 +307,15 @@ class TaskScheduler:
                 check=True,
             ).stdout
             running_job_count = sum(
-                1 for line in running_jobs.splitlines() if line.strip()[0].isdigit()
+                1
+                for line in running_jobs.splitlines()
+                if line.strip() and line[0].isdigit()
             )
 
             queued_job_count = sum(
-                1 for line in queued_jobs.splitlines() if line.strip()[0].isdigit()
+                1
+                for line in queued_jobs.splitlines()
+                if line.strip() and line[0].isdigit()
             )
 
         elif self.device == DEVICE_JEX:
